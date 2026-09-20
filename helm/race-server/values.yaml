@@ -1,0 +1,54 @@
+image:
+  repository: itzg/minecraft-server
+  tag: java21
+  pullPolicy: IfNotPresent
+
+minecraftServer:
+  eula: true
+  type: PAPER
+  version: "1.21.9"
+
+  hardcore: false
+  difficulty: normal
+  gameMode: survival
+  maxPlayers: 4
+  pvp: true
+  onlineMode: true
+  enforceSecureProfile: true
+
+  memory: 1536M
+  motd: "Minecraft Race Platform - Ender Dragon Race"
+
+  serviceType: ClusterIP
+  servicePort: 25565
+
+  rcon:
+    enabled: false
+
+  extraEnv:
+    ENABLE_COMMAND_BLOCK: "false"
+    SPAWN_PROTECTION: "0"
+    VIEW_DISTANCE: "8"
+    SIMULATION_DISTANCE: "6"
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 3Gi
+
+nodeSelector:
+  workload: minecraft-race
+
+persistence:
+  dataDir:
+    enabled: true
+    Size: 10Gi
+    storageClass: local-path
+    accessModes:
+      - ReadWriteOnce
+
+mcbackup:
+  enabled: false

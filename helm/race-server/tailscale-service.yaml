@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: race-server-tailscale
+  namespace: minecraft-race
+  labels:
+    app.kubernetes.io/name: minecraft-race
+    app.kubernetes.io/instance: race-server
+  annotations:
+    tailscale.com/hostname: minecraft-race
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app: race-server-minecraft
+  ports:
+    - name: minecraft-java
+      port: 25565
+      targetPort: 25565
+      protocol: TCP

@@ -1,0 +1,6 @@
+proxmox_endpoint = "https://192.168.1.200:8006/"
+proxmox_insecure = true
+vm_started       = false
+
+# Paste only a PUBLIC key here. Never put a private key in this file.
+ssh_public_key = "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY"

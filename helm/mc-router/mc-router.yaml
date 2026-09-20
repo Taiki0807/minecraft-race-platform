@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mc-router
+  namespace: minecraft-race
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mc-router-service-watcher
+  namespace: minecraft-race
+rules:
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mc-router-service-watcher
+  namespace: minecraft-race
+subjects:
+  - kind: ServiceAccount
+    name: mc-router
+    namespace: minecraft-race
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mc-router-service-watcher
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mc-router
+  namespace: minecraft-race
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mc-router
+  template:
+    metadata:
+      labels:
+        app: mc-router
+    spec:
+      serviceAccountName: mc-router
+      containers:
+        - name: mc-router
+          image: itzg/mc-router:1.46.5
+          args:
+            - --in-kube-cluster
+          env:
+            - name: KUBE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: minecraft
+              containerPort: 25565
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 250m
+              memory: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mc-router
+  namespace: minecraft-race
+spec:
+  type: ClusterIP
+  selector:
+    app: mc-router
+  ports:
+    - name: minecraft
+      port: 25565
+      targetPort: minecraft
