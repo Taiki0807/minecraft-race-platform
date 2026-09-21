@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -385,7 +386,23 @@ func (r *RaceServerRepository) WaitUntilReady(
 				}
 
 				if err != nil {
-					return false, err
+					if apierrors.IsForbidden(err) ||
+						apierrors.IsUnauthorized(err) {
+						return false, fmt.Errorf(
+							"get deployment %s: %w",
+							name,
+							err,
+						)
+					}
+
+					log.Printf(
+						"temporary failure getting deployment: "+
+							"deployment=%s error=%v",
+						name,
+						err,
+					)
+
+					return false, nil
 				}
 
 				if deployment.Status.AvailableReplicas < 1 {
