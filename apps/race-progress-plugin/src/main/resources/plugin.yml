@@ -1,0 +1,6 @@
+name: RaceProgress
+version: 0.1.0-SNAPSHOT
+main: dev.hosokawa.minecraft.race.RaceProgressPlugin
+api-version: '1.21.9'
+description: Tracks progress for Minecraft Race Platform matches
+author: Taiki0807

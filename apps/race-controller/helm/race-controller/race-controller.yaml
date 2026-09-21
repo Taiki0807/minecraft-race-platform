@@ -68,8 +68,14 @@ spec:
         kubernetes.io/hostname: k8s-master
       containers:
         - name: race-controller
-          image: minecraft-race-controller:dev
+          image: minecraft-race-controller:auth-v1
           imagePullPolicy: Never
+          env:
+            - name: RACE_EVENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: race-event-api-token
+                  key: token
           ports:
             - name: http
               containerPort: 8080

@@ -22,6 +22,12 @@ import (
 const (
 	minecraftImage   = "itzg/minecraft-server:latest"
 	minecraftVersion = "1.21.9"
+
+	raceProgressPluginConfigMap = "race-progress-plugin"
+	raceControllerURL           = "http://race-controller.minecraft-race.svc.cluster.local:8080"
+	pluginInstallerImage        = "busybox:1.37.0"
+	raceEventTokenSecretName    = "race-event-api-token"
+	raceEventTokenSecretKey     = "token"
 )
 
 type RaceServerRepository struct {
@@ -78,6 +84,8 @@ func (r *RaceServerRepository) createPlayerServer(
 		ctx,
 		name,
 		labels,
+		raceMatch.ID,
+		player.Slot,
 		raceMatch.Seed,
 	); err != nil {
 		return err
@@ -172,6 +180,8 @@ func (r *RaceServerRepository) createDeployment(
 	ctx context.Context,
 	name string,
 	labels map[string]string,
+	matchID string,
+	playerSlot int,
 	seed int64,
 ) error {
 	replicas := int32(1)
@@ -197,6 +207,30 @@ func (r *RaceServerRepository) createDeployment(
 					NodeSelector: map[string]string{
 						"workload": "minecraft-race",
 					},
+					InitContainers: []corev1.Container{
+						{
+							Name:  "install-race-progress-plugin",
+							Image: pluginInstallerImage,
+							Command: []string{
+								"sh",
+								"-c",
+								"mkdir -p /data/plugins && " +
+									"cp /plugin-source/race-progress-plugin.jar " +
+									"/data/plugins/race-progress-plugin.jar",
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "data",
+									MountPath: "/data",
+								},
+								{
+									Name:      "race-progress-plugin",
+									MountPath: "/plugin-source",
+									ReadOnly:  true,
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:  "minecraft",
@@ -207,7 +241,11 @@ func (r *RaceServerRepository) createDeployment(
 									ContainerPort: 25565,
 								},
 							},
-							Env: minecraftEnvironment(seed),
+							Env: minecraftEnvironment(
+								seed,
+								matchID,
+								playerSlot,
+							),
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("250m"),
@@ -245,6 +283,16 @@ func (r *RaceServerRepository) createDeployment(
 								},
 							},
 						},
+						{
+							Name: "race-progress-plugin",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: raceProgressPluginConfigMap,
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -262,7 +310,11 @@ func (r *RaceServerRepository) createDeployment(
 	return nil
 }
 
-func minecraftEnvironment(seed int64) []corev1.EnvVar {
+func minecraftEnvironment(
+	seed int64,
+	matchID string,
+	playerSlot int,
+) []corev1.EnvVar {
 	return []corev1.EnvVar{
 		{Name: "EULA", Value: "TRUE"},
 		{Name: "TYPE", Value: "PAPER"},
@@ -274,9 +326,28 @@ func minecraftEnvironment(seed int64) []corev1.EnvVar {
 		{Name: "VIEW_DISTANCE", Value: "6"},
 		{Name: "SIMULATION_DISTANCE", Value: "4"},
 		{Name: "SEED", Value: fmt.Sprintf("%d", seed)},
+		{Name: "RACE_MATCH_ID", Value: matchID},
+		{
+			Name:  "RACE_PLAYER_SLOT",
+			Value: fmt.Sprintf("%d", playerSlot),
+		},
+		{
+			Name:  "RACE_CONTROLLER_URL",
+			Value: raceControllerURL,
+		},
+		{
+			Name: "RACE_EVENT_TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: raceEventTokenSecretName,
+					},
+					Key: raceEventTokenSecretKey,
+				},
+			},
+		},
 	}
 }
-
 func (r *RaceServerRepository) Delete(
 	ctx context.Context,
 	raceMatch *match.Match,

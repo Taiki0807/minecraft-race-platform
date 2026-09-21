@@ -2,13 +2,16 @@ package httpapi
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Taiki0807/minecraft-race-platform/apps/race-controller/internal/match"
+	"github.com/Taiki0807/minecraft-race-platform/apps/race-controller/internal/raceevent"
 )
 
 type createMatchRequest struct {
@@ -17,6 +20,10 @@ type createMatchRequest struct {
 
 type errorResponse struct {
 	Error string `json:"error"`
+}
+
+type raceEventsResponse struct {
+	Events []raceevent.Event `json:"events"`
 }
 
 type RaceServerRepository interface {
@@ -45,10 +52,22 @@ type MatchStateStore interface {
 	Delete(ctx context.Context) error
 }
 
+type RaceEventStore interface {
+	Save(
+		ctx context.Context,
+		events []raceevent.Event,
+	) error
+
+	Delete(ctx context.Context) error
+}
+
 func NewRouter(
 	matchService *match.Service,
 	raceServerRepository RaceServerRepository,
 	matchStateStore MatchStateStore,
+	raceEventService *raceevent.Service,
+	raceEventStore RaceEventStore,
+	raceEventToken string,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -84,6 +103,8 @@ func NewRouter(
 			matchService,
 			raceServerRepository,
 			matchStateStore,
+			raceEventService,
+			raceEventStore,
 		)
 	})
 
@@ -92,6 +113,44 @@ func NewRouter(
 		r *http.Request,
 	) {
 		startCurrentMatchHandler(w, r, matchService, matchStateStore)
+	})
+
+	mux.HandleFunc("POST /api/v1/internal/race-events", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
+		createRaceEventHandler(
+			w,
+			r,
+			matchService,
+			raceEventService,
+			raceEventStore,
+			raceEventToken,
+		)
+	})
+
+	mux.HandleFunc("GET /api/v1/matches/current/progress", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
+		currentMatchProgressHandler(
+			w,
+			r,
+			matchService,
+			raceEventService,
+		)
+	})
+
+	mux.HandleFunc("GET /api/v1/matches/current/events", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
+		currentRaceEventsHandler(
+			w,
+			r,
+			matchService,
+			raceEventService,
+		)
 	})
 
 	return mux
@@ -212,6 +271,8 @@ func deleteCurrentMatchHandler(
 	matchService *match.Service,
 	raceServerRepository RaceServerRepository,
 	matchStateStore MatchStateStore,
+	raceEventService *raceevent.Service,
+	raceEventStore RaceEventStore,
 ) {
 	currentMatch, err := matchService.Current()
 	if errors.Is(err, match.ErrMatchNotFound) {
@@ -248,6 +309,22 @@ func deleteCurrentMatchHandler(
 		})
 		return
 	}
+
+	if err := raceEventStore.Delete(
+		r.Context(),
+	); err != nil {
+		log.Printf(
+			"failed to delete race event state: %v",
+			err,
+		)
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to delete race event state",
+		})
+		return
+	}
+
+	raceEventService.DeleteByMatch(currentMatch.ID)
 
 	if err := matchService.DeleteCurrent(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{
@@ -451,4 +528,212 @@ func startCurrentMatchHandler(
 	}
 
 	writeJSON(w, http.StatusOK, startedMatch)
+}
+
+func createRaceEventHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+	matchService *match.Service,
+	raceEventService *raceevent.Service,
+	raceEventStore RaceEventStore,
+	raceEventToken string,
+) {
+	if !hasValidBearerToken(
+		r,
+		raceEventToken,
+	) {
+		writeJSON(w, http.StatusUnauthorized, errorResponse{
+			Error: "unauthorized",
+		})
+		return
+	}
+	var raceEvent raceevent.Event
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&raceEvent); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{
+			Error: "invalid request body",
+		})
+		return
+	}
+
+	currentMatch, err := matchService.Current()
+
+	if errors.Is(err, match.ErrMatchNotFound) {
+		writeJSON(w, http.StatusNotFound, errorResponse{
+			Error: err.Error(),
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("failed to get current match for race event: %v", err)
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to get current match",
+		})
+		return
+	}
+
+	if raceEvent.MatchID != currentMatch.ID {
+		writeJSON(w, http.StatusConflict, errorResponse{
+			Error: "event match does not match current match",
+		})
+		return
+	}
+
+	if raceEvent.Slot < 1 || raceEvent.Slot > currentMatch.PlayerCount {
+		writeJSON(w, http.StatusBadRequest, errorResponse{
+			Error: "event slot is outside the current match",
+		})
+		return
+	}
+
+	recordedEvent, created, err := raceEventService.Record(raceEvent)
+
+	switch {
+	case errors.Is(err, raceevent.ErrInvalidEvent),
+		errors.Is(err, raceevent.ErrUnsupportedType):
+		writeJSON(w, http.StatusBadRequest, errorResponse{
+			Error: err.Error(),
+		})
+		return
+
+	case err != nil:
+		log.Printf("failed to record race event: %v", err)
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to record race event",
+		})
+		return
+	}
+
+	events := raceEventService.ListByMatch(
+		currentMatch.ID,
+	)
+
+	if err := raceEventStore.Save(
+		r.Context(),
+		events,
+	); err != nil {
+		log.Printf(
+			"failed to save race events: match=%s error=%v",
+			currentMatch.ID,
+			err,
+		)
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to save race events",
+		})
+		return
+	}
+
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+
+	writeJSON(w, status, recordedEvent)
+}
+
+func currentRaceEventsHandler(
+	w http.ResponseWriter,
+	_ *http.Request,
+	matchService *match.Service,
+	raceEventService *raceevent.Service,
+) {
+	currentMatch, err := matchService.Current()
+
+	if errors.Is(err, match.ErrMatchNotFound) {
+		writeJSON(w, http.StatusNotFound, errorResponse{
+			Error: err.Error(),
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("failed to get current match events: %v", err)
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to get current match",
+		})
+		return
+	}
+
+	events := raceEventService.ListByMatch(currentMatch.ID)
+
+	writeJSON(w, http.StatusOK, raceEventsResponse{
+		Events: events,
+	})
+}
+
+func currentMatchProgressHandler(
+	w http.ResponseWriter,
+	_ *http.Request,
+	matchService *match.Service,
+	raceEventService *raceevent.Service,
+) {
+	currentMatch, err := matchService.Current()
+
+	if errors.Is(err, match.ErrMatchNotFound) {
+		writeJSON(w, http.StatusNotFound, errorResponse{
+			Error: err.Error(),
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf(
+			"failed to get current match progress: %v",
+			err,
+		)
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to get current match",
+		})
+		return
+	}
+
+	progress := raceEventService.Progress(
+		currentMatch.ID,
+		currentMatch.PlayerCount,
+	)
+
+	writeJSON(w, http.StatusOK, progress)
+}
+
+func hasValidBearerToken(
+	r *http.Request,
+	expectedToken string,
+) bool {
+	const bearerPrefix = "Bearer "
+
+	authorization := strings.TrimSpace(
+		r.Header.Get("Authorization"),
+	)
+
+	if !strings.HasPrefix(
+		authorization,
+		bearerPrefix,
+	) {
+		return false
+	}
+
+	providedToken := strings.TrimSpace(
+		strings.TrimPrefix(
+			authorization,
+			bearerPrefix,
+		),
+	)
+
+	if providedToken == "" {
+		return false
+	}
+
+	return subtle.ConstantTimeCompare(
+		[]byte(providedToken),
+		[]byte(expectedToken),
+	) == 1
 }
