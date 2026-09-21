@@ -324,9 +324,51 @@ func monitorMatchReadiness(
 			err,
 		)
 
-		_ = matchService.SetStatus(
+		if statusErr := matchService.SetStatus(
 			raceMatch.ID,
 			match.StatusError,
+		); statusErr != nil {
+			log.Printf(
+				"failed to update match status to ERROR: "+
+					"match=%s error=%v",
+				raceMatch.ID,
+				statusErr,
+			)
+			return
+		}
+
+		errorMatch, currentErr := matchService.Current()
+		if currentErr != nil {
+			log.Printf(
+				"failed to get errored match: match=%s error=%v",
+				raceMatch.ID,
+				currentErr,
+			)
+			return
+		}
+
+		// 元のctxはタイムアウト済みの可能性があるため、新しいContextを使う
+		saveContext, saveCancel := context.WithTimeout(
+			context.Background(),
+			10*time.Second,
+		)
+		defer saveCancel()
+
+		if saveErr := matchStateStore.Save(
+			saveContext,
+			errorMatch,
+		); saveErr != nil {
+			log.Printf(
+				"failed to save errored match: match=%s error=%v",
+				raceMatch.ID,
+				saveErr,
+			)
+			return
+		}
+
+		log.Printf(
+			"race match entered error state: match=%s",
+			raceMatch.ID,
 		)
 		return
 	}
