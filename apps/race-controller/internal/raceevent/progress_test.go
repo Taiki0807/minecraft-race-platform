@@ -141,3 +141,66 @@ func TestServiceProgress(t *testing.T) {
 		t.Errorf("player 2 advancements must not be nil")
 	}
 }
+
+func TestServiceProgressRanksDragonDefeats(t *testing.T) {
+	service := NewService()
+
+	baseTime := time.Date(
+		2026,
+		9,
+		21,
+		14,
+		0,
+		0,
+		0,
+		time.UTC,
+	)
+
+	events := []Event{
+		{
+			ID:         "player-1-finish",
+			MatchID:    "match-1",
+			Slot:       1,
+			PlayerUUID: "player-1",
+			PlayerName: "PlayerOne",
+			Type:       TypeDragonDefeated,
+			OccurredAt: baseTime.Add(2 * time.Minute),
+		},
+		{
+			ID:         "player-2-finish",
+			MatchID:    "match-1",
+			Slot:       2,
+			PlayerUUID: "player-2",
+			PlayerName: "PlayerTwo",
+			Type:       TypeDragonDefeated,
+			OccurredAt: baseTime,
+		},
+	}
+
+	for _, event := range events {
+		if _, _, err := service.Record(event); err != nil {
+			t.Fatalf("Record() error = %v", err)
+		}
+	}
+
+	progress := service.Progress("match-1", 2)
+
+	player1 := progress.Players[0]
+	player2 := progress.Players[1]
+
+	if player1.Rank != 2 {
+		t.Errorf("player 1 rank = %d, want 2", player1.Rank)
+	}
+
+	if player2.Rank != 1 {
+		t.Errorf("player 2 rank = %d, want 1", player2.Rank)
+	}
+
+	if player1.FinishedAt == nil {
+		t.Fatalf("player 1 FinishedAt is nil")
+	}
+
+	if player2.FinishedAt == nil {
+		t.Fatalf("player 2 FinishedAt is nil")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Taiki0807/minecraft-race-platform/apps/race-controller/internal/match"
@@ -70,6 +71,7 @@ func NewRouter(
 	raceEventToken string,
 ) http.Handler {
 	mux := http.NewServeMux()
+	raceEventMutationMutex := &sync.Mutex{}
 
 	mux.HandleFunc("GET /healthz", healthHandler)
 
@@ -123,9 +125,11 @@ func NewRouter(
 			w,
 			r,
 			matchService,
+			matchStateStore,
 			raceEventService,
 			raceEventStore,
 			raceEventToken,
+			raceEventMutationMutex,
 		)
 	})
 
@@ -534,9 +538,11 @@ func createRaceEventHandler(
 	w http.ResponseWriter,
 	r *http.Request,
 	matchService *match.Service,
+	matchStateStore MatchStateStore,
 	raceEventService *raceevent.Service,
 	raceEventStore RaceEventStore,
 	raceEventToken string,
+	raceEventMutationMutex *sync.Mutex,
 ) {
 	if !hasValidBearerToken(
 		r,
@@ -591,6 +597,9 @@ func createRaceEventHandler(
 		return
 	}
 
+	raceEventMutationMutex.Lock()
+	defer raceEventMutationMutex.Unlock()
+
 	recordedEvent, created, err := raceEventService.Record(raceEvent)
 
 	switch {
@@ -628,6 +637,92 @@ func createRaceEventHandler(
 			Error: "failed to save race events",
 		})
 		return
+	}
+
+	if raceEvent.Type == raceevent.TypeDragonDefeated {
+		progress := raceEventService.Progress(
+			currentMatch.ID,
+			currentMatch.PlayerCount,
+		)
+
+		allPlayersFinished := len(progress.Players) > 0
+		var finishedAt time.Time
+
+		for _, playerProgress := range progress.Players {
+			if playerProgress.FinishedAt == nil {
+				allPlayersFinished = false
+				break
+			}
+
+			if finishedAt.IsZero() ||
+				playerProgress.FinishedAt.After(finishedAt) {
+				finishedAt =
+					*playerProgress.FinishedAt
+			}
+		}
+
+		if allPlayersFinished {
+			var finishedMatch *match.Match
+
+			switch currentMatch.Status {
+			case match.StatusRunning:
+				finishedMatch, err =
+					matchService.FinishCurrent(
+						finishedAt,
+					)
+
+			case match.StatusFinished:
+				finishedMatch, err =
+					matchService.Current()
+			}
+
+			if err != nil {
+				log.Printf(
+					"failed to finish match: match=%s error=%v",
+					currentMatch.ID,
+					err,
+				)
+
+				writeJSON(
+					w,
+					http.StatusInternalServerError,
+					errorResponse{
+						Error: "failed to finish match",
+					},
+				)
+				return
+			}
+
+			if finishedMatch != nil {
+				if err := matchStateStore.Save(
+					r.Context(),
+					finishedMatch,
+				); err != nil {
+					log.Printf(
+						"failed to save finished match: match=%s error=%v",
+						currentMatch.ID,
+						err,
+					)
+
+					writeJSON(
+						w,
+						http.StatusInternalServerError,
+						errorResponse{
+							Error: "failed to save finished match",
+						},
+					)
+					return
+				}
+
+				log.Printf(
+					"race match is finished: match=%s finishedAt=%s",
+					finishedMatch.ID,
+					finishedMatch.FinishedAt.Format(
+						time.RFC3339Nano,
+					),
+				)
+			}
+		}
 	}
 
 	status := http.StatusOK

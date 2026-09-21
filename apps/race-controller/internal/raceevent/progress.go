@@ -19,6 +19,8 @@ type PlayerProgress struct {
 	EnteredNether  bool       `json:"enteredNether"`
 	EnteredEnd     bool       `json:"enteredEnd"`
 	DragonDefeated bool       `json:"dragonDefeated"`
+	FinishedAt     *time.Time `json:"finishedAt,omitempty"`
+	Rank           int        `json:"rank,omitempty"`
 	Advancements   []string   `json:"advancements"`
 	EventCount     int        `json:"eventCount"`
 	LastEventAt    *time.Time `json:"lastEventAt,omitempty"`
@@ -87,6 +89,11 @@ func (s *Service) Progress(
 		case TypeDragonDefeated:
 			player.DragonDefeated = true
 
+			if player.FinishedAt == nil {
+				finishedAt := event.OccurredAt
+				player.FinishedAt = &finishedAt
+			}
+
 		case TypeAdvancementCompleted:
 			if event.AdvancementKey == "" {
 				continue
@@ -109,6 +116,37 @@ func (s *Service) Progress(
 
 	for index := range progress.Players {
 		slices.Sort(progress.Players[index].Advancements)
+	}
+
+	finishedPlayerIndexes := make([]int, 0)
+
+	for index := range progress.Players {
+		if progress.Players[index].FinishedAt != nil {
+			finishedPlayerIndexes = append(
+				finishedPlayerIndexes,
+				index,
+			)
+		}
+	}
+
+	slices.SortFunc(
+		finishedPlayerIndexes,
+		func(leftIndex, rightIndex int) int {
+			leftFinishedAt :=
+				progress.Players[leftIndex].FinishedAt
+
+			rightFinishedAt :=
+				progress.Players[rightIndex].FinishedAt
+
+			return leftFinishedAt.Compare(
+				*rightFinishedAt,
+			)
+		},
+	)
+
+	for rankIndex, playerIndex := range finishedPlayerIndexes {
+		progress.Players[playerIndex].Rank =
+			rankIndex + 1
 	}
 
 	return progress

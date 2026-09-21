@@ -68,7 +68,7 @@ spec:
         kubernetes.io/hostname: k8s-master
       containers:
         - name: race-controller
-          image: minecraft-race-controller:auth-v1
+          image: minecraft-race-controller:finish-v2
           imagePullPolicy: Never
           env:
             - name: RACE_EVENT_TOKEN

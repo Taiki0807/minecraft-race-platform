@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestServiceCreate(t *testing.T) {
@@ -157,6 +158,91 @@ func TestServiceDeleteWithoutMatch(t *testing.T) {
 			"DeleteCurrent() error = %v, want %v",
 			err,
 			ErrMatchNotFound,
+		)
+	}
+}
+
+func TestServiceFinishCurrent(t *testing.T) {
+	service := NewService()
+
+	createdMatch, err := service.Create(1)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if err := service.SetStatus(
+		createdMatch.ID,
+		StatusReady,
+	); err != nil {
+		t.Fatalf("SetStatus() error = %v", err)
+	}
+
+	if _, err := service.StartCurrent(); err != nil {
+		t.Fatalf("StartCurrent() error = %v", err)
+	}
+
+	finishedAt := time.Date(
+		2026,
+		9,
+		21,
+		15,
+		0,
+		0,
+		0,
+		time.UTC,
+	)
+
+	finishedMatch, err :=
+		service.FinishCurrent(finishedAt)
+
+	if err != nil {
+		t.Fatalf("FinishCurrent() error = %v", err)
+	}
+
+	if finishedMatch.Status != StatusFinished {
+		t.Errorf(
+			"status = %q, want %q",
+			finishedMatch.Status,
+			StatusFinished,
+		)
+	}
+
+	if finishedMatch.FinishedAt == nil {
+		t.Fatalf("FinishedAt is nil")
+	}
+
+	if !finishedMatch.FinishedAt.Equal(finishedAt) {
+		t.Errorf(
+			"FinishedAt = %v, want %v",
+			finishedMatch.FinishedAt,
+			finishedAt,
+		)
+	}
+}
+
+func TestServiceFinishCurrentRejectsReadyMatch(
+	t *testing.T,
+) {
+	service := NewService()
+
+	createdMatch, err := service.Create(1)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if err := service.SetStatus(
+		createdMatch.ID,
+		StatusReady,
+	); err != nil {
+		t.Fatalf("SetStatus() error = %v", err)
+	}
+
+	_, err = service.FinishCurrent(time.Now())
+
+	if !errors.Is(err, ErrMatchNotRunning) {
+		t.Fatalf(
+			"FinishCurrent() error = %v, want ErrMatchNotRunning",
+			err,
 		)
 	}
 }

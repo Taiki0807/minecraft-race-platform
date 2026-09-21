@@ -16,6 +16,7 @@ var (
 	ErrMatchAlreadyActive = errors.New("a match is already active")
 	ErrMatchNotFound      = errors.New("match not found")
 	ErrMatchNotReady      = errors.New("match is not ready")
+	ErrMatchNotRunning    = errors.New("match is not running")
 )
 
 type Service struct {
@@ -166,6 +167,28 @@ func (s *Service) StartCurrent() (*Match, error) {
 	return cloneMatch(s.current), nil
 }
 
+func (s *Service) FinishCurrent(
+	finishedAt time.Time,
+) (*Match, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.current == nil {
+		return nil, ErrMatchNotFound
+	}
+
+	if s.current.Status != StatusRunning {
+		return nil, ErrMatchNotRunning
+	}
+
+	finishedAt = finishedAt.UTC()
+
+	s.current.Status = StatusFinished
+	s.current.FinishedAt = &finishedAt
+
+	return cloneMatch(s.current), nil
+}
+
 func cloneMatch(source *Match) *Match {
 	players := make([]Player, len(source.Players))
 	copy(players, source.Players)
@@ -179,6 +202,7 @@ func cloneMatch(source *Match) *Match {
 		CreatedAt:   source.CreatedAt,
 		ReadyAt:     cloneTime(source.ReadyAt),
 		StartedAt:   cloneTime(source.StartedAt),
+		FinishedAt:  cloneTime(source.FinishedAt),
 	}
 }
 

@@ -26,4 +26,5 @@ type Match struct {
 	CreatedAt   time.Time  `json:"createdAt"`
 	ReadyAt     *time.Time `json:"readyAt,omitempty"`
 	StartedAt   *time.Time `json:"startedAt,omitempty"`
+	FinishedAt  *time.Time `json:"finishedAt,omitempty"`
 }
