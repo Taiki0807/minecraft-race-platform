@@ -58,6 +58,12 @@ func main() {
 		"minecraft-race",
 	)
 
+	httpapi.ResumeMatchMonitoring(
+		matchService,
+		raceServerRepository,
+		matchStateStore,
+	)
+
 	router := httpapi.NewRouter(
 		matchService,
 		raceServerRepository,

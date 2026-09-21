@@ -268,6 +268,42 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	}
 }
 
+func ResumeMatchMonitoring(
+	matchService *match.Service,
+	raceServerRepository RaceServerRepository,
+	matchStateStore MatchStateStore,
+) {
+	currentMatch, err := matchService.Current()
+
+	if errors.Is(err, match.ErrMatchNotFound) {
+		return
+	}
+
+	if err != nil {
+		log.Printf(
+			"failed to get current match for monitoring: %v",
+			err,
+		)
+		return
+	}
+
+	if currentMatch.Status != match.StatusCreating {
+		return
+	}
+
+	log.Printf(
+		"resuming readiness monitoring: match=%s",
+		currentMatch.ID,
+	)
+
+	go monitorMatchReadiness(
+		currentMatch,
+		matchService,
+		raceServerRepository,
+		matchStateStore,
+	)
+}
+
 func monitorMatchReadiness(
 	raceMatch *match.Match,
 	matchService *match.Service,
