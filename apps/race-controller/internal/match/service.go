@@ -191,3 +191,20 @@ func cloneTime(source *time.Time) *time.Time {
 
 	return &value
 }
+
+func (s *Service) Restore(storedMatch *Match) error {
+	if storedMatch == nil {
+		return ErrMatchNotFound
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.current != nil {
+		return ErrMatchAlreadyActive
+	}
+
+	s.current = cloneMatch(storedMatch)
+
+	return nil
+}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -25,6 +27,32 @@ func main() {
 
 	matchService := match.NewService()
 
+	matchStateStore := kube.NewMatchStore(
+		kubernetesClient,
+		"minecraft-race",
+	)
+
+	storedMatch, err := matchStateStore.Load(context.Background())
+
+	switch {
+	case err == nil:
+		if err := matchService.Restore(storedMatch); err != nil {
+			log.Fatalf("failed to restore match: %v", err)
+		}
+
+		log.Printf(
+			"Restored match state: match=%s status=%s",
+			storedMatch.ID,
+			storedMatch.Status,
+		)
+
+	case errors.Is(err, kube.ErrMatchStateNotFound):
+		log.Printf("No stored match state found")
+
+	default:
+		log.Fatalf("failed to load match state: %v", err)
+	}
+
 	raceServerRepository := kube.NewRaceServerRepository(
 		kubernetesClient,
 		"minecraft-race",
@@ -33,6 +61,7 @@ func main() {
 	router := httpapi.NewRouter(
 		matchService,
 		raceServerRepository,
+		matchStateStore,
 	)
 
 	server := &http.Server{

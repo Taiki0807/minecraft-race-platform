@@ -36,9 +36,19 @@ type RaceServerRepository interface {
 	) error
 }
 
+type MatchStateStore interface {
+	Save(
+		ctx context.Context,
+		raceMatch *match.Match,
+	) error
+
+	Delete(ctx context.Context) error
+}
+
 func NewRouter(
 	matchService *match.Service,
 	raceServerRepository RaceServerRepository,
+	matchStateStore MatchStateStore,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -53,6 +63,7 @@ func NewRouter(
 			r,
 			matchService,
 			raceServerRepository,
+			matchStateStore,
 		)
 	})
 
@@ -72,6 +83,7 @@ func NewRouter(
 			r,
 			matchService,
 			raceServerRepository,
+			matchStateStore,
 		)
 	})
 
@@ -79,7 +91,7 @@ func NewRouter(
 		w http.ResponseWriter,
 		r *http.Request,
 	) {
-		startCurrentMatchHandler(w, r, matchService)
+		startCurrentMatchHandler(w, r, matchService, matchStateStore)
 	})
 
 	return mux
@@ -96,6 +108,7 @@ func createMatchHandler(
 	r *http.Request,
 	matchService *match.Service,
 	raceServerRepository RaceServerRepository,
+	matchStateStore MatchStateStore,
 ) {
 	var request createMatchRequest
 
@@ -133,6 +146,20 @@ func createMatchHandler(
 		return
 	}
 
+	if err := matchStateStore.Save(
+		r.Context(),
+		createdMatch,
+	); err != nil {
+		log.Printf("failed to save match state: %v", err)
+
+		_ = matchService.DeleteCurrent()
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to save match state",
+		})
+		return
+	}
+
 	if err := raceServerRepository.Create(
 		r.Context(),
 		createdMatch,
@@ -151,6 +178,7 @@ func createMatchHandler(
 		createdMatch,
 		matchService,
 		raceServerRepository,
+		matchStateStore,
 	)
 
 	writeJSON(w, http.StatusAccepted, createdMatch)
@@ -183,6 +211,7 @@ func deleteCurrentMatchHandler(
 	r *http.Request,
 	matchService *match.Service,
 	raceServerRepository RaceServerRepository,
+	matchStateStore MatchStateStore,
 ) {
 	currentMatch, err := matchService.Current()
 	if errors.Is(err, match.ErrMatchNotFound) {
@@ -211,6 +240,15 @@ func deleteCurrentMatchHandler(
 		return
 	}
 
+	if err := matchStateStore.Delete(r.Context()); err != nil {
+		log.Printf("failed to delete match state: %v", err)
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to delete match state",
+		})
+		return
+	}
+
 	if err := matchService.DeleteCurrent(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{
 			Error: "failed to delete match",
@@ -234,6 +272,7 @@ func monitorMatchReadiness(
 	raceMatch *match.Match,
 	matchService *match.Service,
 	raceServerRepository RaceServerRepository,
+	matchStateStore MatchStateStore,
 ) {
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
@@ -268,6 +307,20 @@ func monitorMatchReadiness(
 		return
 	}
 
+	currentMatch, err := matchService.Current()
+	if err != nil {
+		log.Printf("failed to get ready match: %v", err)
+		return
+	}
+
+	if err := matchStateStore.Save(
+		context.Background(),
+		currentMatch,
+	); err != nil {
+		log.Printf("failed to save ready match: %v", err)
+		return
+	}
+
 	log.Printf("race match is ready: match=%s", raceMatch.ID)
 }
 
@@ -275,6 +328,7 @@ func startCurrentMatchHandler(
 	w http.ResponseWriter,
 	_ *http.Request,
 	matchService *match.Service,
+	matchStateStore MatchStateStore,
 ) {
 	startedMatch, err := matchService.StartCurrent()
 
@@ -283,18 +337,40 @@ func startCurrentMatchHandler(
 		writeJSON(w, http.StatusNotFound, errorResponse{
 			Error: err.Error(),
 		})
+		return
 
 	case errors.Is(err, match.ErrMatchNotReady):
 		writeJSON(w, http.StatusConflict, errorResponse{
 			Error: err.Error(),
 		})
+		return
 
 	case err != nil:
+		log.Printf("failed to start match: %v", err)
+
 		writeJSON(w, http.StatusInternalServerError, errorResponse{
 			Error: "failed to start match",
 		})
-
-	default:
-		writeJSON(w, http.StatusOK, startedMatch)
+		return
 	}
+
+	saveContext, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
+	if err := matchStateStore.Save(
+		saveContext,
+		startedMatch,
+	); err != nil {
+		log.Printf("failed to save running match: %v", err)
+
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to save running match",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, startedMatch)
 }
