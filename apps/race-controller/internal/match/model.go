@@ -1,5 +1,7 @@
 package match
 
+import "time"
+
 type Status string
 
 const (
@@ -16,9 +18,12 @@ type Player struct {
 }
 
 type Match struct {
-	ID          string   `json:"id"`
-	Seed        int64    `json:"seed"`
-	Status      Status   `json:"status"`
-	PlayerCount int      `json:"playerCount"`
-	Players     []Player `json:"players"`
+	ID          string     `json:"id"`
+	Seed        int64      `json:"seed"`
+	Status      Status     `json:"status"`
+	PlayerCount int        `json:"playerCount"`
+	Players     []Player   `json:"players"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	ReadyAt     *time.Time `json:"readyAt,omitempty"`
+	StartedAt   *time.Time `json:"startedAt,omitempty"`
 }

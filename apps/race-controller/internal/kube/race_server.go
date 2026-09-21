@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/Taiki0807/minecraft-race-platform/apps/race-controller/internal/match"
@@ -353,4 +355,51 @@ func resourceLabels(matchID string, slot int) map[string]string {
 		"race.hosokawa-lab.dev/match-id": matchID,
 		"race.hosokawa-lab.dev/slot":     fmt.Sprintf("%d", slot),
 	}
+}
+
+func (r *RaceServerRepository) WaitUntilReady(
+	ctx context.Context,
+	raceMatch *match.Match,
+) error {
+	err := wait.PollUntilContextCancel(
+		ctx,
+		5*time.Second,
+		true,
+		func(ctx context.Context) (bool, error) {
+			for _, player := range raceMatch.Players {
+				name := resourceName(
+					raceMatch.ID,
+					player.Slot,
+				)
+
+				deployment, err := r.client.AppsV1().
+					Deployments(r.namespace).
+					Get(
+						ctx,
+						name,
+						metav1.GetOptions{},
+					)
+
+				if apierrors.IsNotFound(err) {
+					return false, nil
+				}
+
+				if err != nil {
+					return false, err
+				}
+
+				if deployment.Status.AvailableReplicas < 1 {
+					return false, nil
+				}
+			}
+
+			return true, nil
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("wait for race servers: %w", err)
+	}
+
+	return nil
 }

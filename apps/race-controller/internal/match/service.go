@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 )
 
 var (
 	ErrInvalidPlayerCount = errors.New("player count must be between 1 and 2")
 	ErrMatchAlreadyActive = errors.New("a match is already active")
 	ErrMatchNotFound      = errors.New("match not found")
+	ErrMatchNotReady      = errors.New("match is not ready")
 )
 
 type Service struct {
@@ -66,11 +68,11 @@ func (s *Service) Create(playerCount int) (*Match, error) {
 		Status:      StatusCreating,
 		PlayerCount: playerCount,
 		Players:     players,
+		CreatedAt:   time.Now().UTC(),
 	}
-
 	s.current = createdMatch
 
-	return createdMatch, nil
+	return cloneMatch(createdMatch), nil
 }
 
 func (s *Service) Current() (*Match, error) {
@@ -81,7 +83,7 @@ func (s *Service) Current() (*Match, error) {
 		return nil, ErrMatchNotFound
 	}
 
-	return s.current, nil
+	return cloneMatch(s.current), nil
 }
 
 func (s *Service) DeleteCurrent() error {
@@ -117,4 +119,75 @@ func generateSeed() (int64, error) {
 	seed := int64(binary.BigEndian.Uint64(randomBytes) & math.MaxInt64)
 
 	return seed, nil
+}
+
+func (s *Service) SetStatus(
+	matchID string,
+	status Status,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.current == nil || s.current.ID != matchID {
+		return ErrMatchNotFound
+	}
+
+	s.current.Status = status
+
+	now := time.Now().UTC()
+
+	switch status {
+	case StatusReady:
+		s.current.ReadyAt = &now
+	case StatusRunning:
+		s.current.StartedAt = &now
+	}
+
+	return nil
+}
+
+func (s *Service) StartCurrent() (*Match, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.current == nil {
+		return nil, ErrMatchNotFound
+	}
+
+	if s.current.Status != StatusReady {
+		return nil, ErrMatchNotReady
+	}
+
+	now := time.Now().UTC()
+
+	s.current.Status = StatusRunning
+	s.current.StartedAt = &now
+
+	return cloneMatch(s.current), nil
+}
+
+func cloneMatch(source *Match) *Match {
+	players := make([]Player, len(source.Players))
+	copy(players, source.Players)
+
+	return &Match{
+		ID:          source.ID,
+		Seed:        source.Seed,
+		Status:      source.Status,
+		PlayerCount: source.PlayerCount,
+		Players:     players,
+		CreatedAt:   source.CreatedAt,
+		ReadyAt:     cloneTime(source.ReadyAt),
+		StartedAt:   cloneTime(source.StartedAt),
+	}
+}
+
+func cloneTime(source *time.Time) *time.Time {
+	if source == nil {
+		return nil
+	}
+
+	value := *source
+
+	return &value
 }

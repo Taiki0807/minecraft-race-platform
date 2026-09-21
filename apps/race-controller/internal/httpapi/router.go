@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Taiki0807/minecraft-race-platform/apps/race-controller/internal/match"
 )
@@ -25,6 +26,11 @@ type RaceServerRepository interface {
 	) error
 
 	Delete(
+		ctx context.Context,
+		raceMatch *match.Match,
+	) error
+
+	WaitUntilReady(
 		ctx context.Context,
 		raceMatch *match.Match,
 	) error
@@ -67,6 +73,13 @@ func NewRouter(
 			matchService,
 			raceServerRepository,
 		)
+	})
+
+	mux.HandleFunc("POST /api/v1/matches/current/start", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
+		startCurrentMatchHandler(w, r, matchService)
 	})
 
 	return mux
@@ -133,6 +146,12 @@ func createMatchHandler(
 		})
 		return
 	}
+
+	go monitorMatchReadiness(
+		createdMatch,
+		matchService,
+		raceServerRepository,
+	)
 
 	writeJSON(w, http.StatusAccepted, createdMatch)
 }
@@ -208,5 +227,74 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 	if err := json.NewEncoder(w).Encode(value); err != nil {
 		log.Printf("failed to encode response: %v", err)
+	}
+}
+
+func monitorMatchReadiness(
+	raceMatch *match.Match,
+	matchService *match.Service,
+	raceServerRepository RaceServerRepository,
+) {
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Minute,
+	)
+	defer cancel()
+
+	err := raceServerRepository.WaitUntilReady(ctx, raceMatch)
+	if err != nil {
+		log.Printf(
+			"race servers failed to become ready: match=%s error=%v",
+			raceMatch.ID,
+			err,
+		)
+
+		_ = matchService.SetStatus(
+			raceMatch.ID,
+			match.StatusError,
+		)
+		return
+	}
+
+	if err := matchService.SetStatus(
+		raceMatch.ID,
+		match.StatusReady,
+	); err != nil {
+		log.Printf(
+			"failed to update match status: match=%s error=%v",
+			raceMatch.ID,
+			err,
+		)
+		return
+	}
+
+	log.Printf("race match is ready: match=%s", raceMatch.ID)
+}
+
+func startCurrentMatchHandler(
+	w http.ResponseWriter,
+	_ *http.Request,
+	matchService *match.Service,
+) {
+	startedMatch, err := matchService.StartCurrent()
+
+	switch {
+	case errors.Is(err, match.ErrMatchNotFound):
+		writeJSON(w, http.StatusNotFound, errorResponse{
+			Error: err.Error(),
+		})
+
+	case errors.Is(err, match.ErrMatchNotReady):
+		writeJSON(w, http.StatusConflict, errorResponse{
+			Error: err.Error(),
+		})
+
+	case err != nil:
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "failed to start match",
+		})
+
+	default:
+		writeJSON(w, http.StatusOK, startedMatch)
 	}
 }
