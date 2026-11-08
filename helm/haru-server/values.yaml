@@ -33,6 +33,9 @@ minecraftServer:
     SPAWN_PROTECTION: "0"
     VIEW_DISTANCE: "8"
     SIMULATION_DISTANCE: "6"
+    # 配信用の観戦クライアントが /gamemode spectator を自分で打てるようにOP権限を付与する。
+    # <観戦用アカウント名> を実際に使うMinecraftユーザー名に書き換えてから apply/upgrade すること。
+    OPS: "<観戦用アカウント名>"
 
 resources:
   requests:
