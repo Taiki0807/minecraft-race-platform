@@ -196,58 +196,68 @@ async function main(): Promise<void> {
         break;
       }
 
-      const state = buildState(bot);
-      const rules = repo.getActiveRules(db);
-
-      // (D) RAG検索: 現在の目標に近い過去の成功パターンをヒントとしてプロンプトへ混ぜる。
-      const queryEmbedding = await generateEmbedding(currentGoal ?? "マイクラでの行動", embeddingConfig);
-      const skillHints = formatSkillHints(repo.searchSkills(db, queryEmbedding, SKILL_SEARCH_TOP_K));
-
-      const system = buildSystemPrompt(PERSONA_PROMPT, state, rules, skillHints);
-
-      history.push({ role: "user", content: JSON.stringify({ state }) });
-
-      const result = await runJudgmentCycle({
-        llm,
-        registry,
-        bot,
-        system,
-        history,
-        maxTokens: 512,
-        bridge,
-        logger,
-        sessionId,
-      });
-
-      if (result.text) {
-        history.push({ role: "assistant", content: result.text });
-      }
-
+      // bot未spawn・LLM到達不能など、1サイクル分の判断・実行で起きる想定外の例外は
+      // ここで必ず捕まえる。何もしないとプロセス全体がunhandled rejectionで落ちるため
+      // (このループは void runLoop() で開始され、誰も await/catchしていない)。
       let shouldStop = false;
-      for (const executed of result.executed) {
-        history.push({
-          role: "tool",
-          content: `${executed.name}: ${executed.result.ok ? "ok" : "failed"} - ${executed.result.message}`,
+      try {
+        const state = buildState(bot);
+        const rules = repo.getActiveRules(db);
+
+        // (D) RAG検索: 現在の目標に近い過去の成功パターンをヒントとしてプロンプトへ混ぜる。
+        const queryEmbedding = await generateEmbedding(currentGoal ?? "マイクラでの行動", embeddingConfig);
+        const skillHints = formatSkillHints(repo.searchSkills(db, queryEmbedding, SKILL_SEARCH_TOP_K));
+
+        const system = buildSystemPrompt(PERSONA_PROMPT, state, rules, skillHints);
+
+        history.push({ role: "user", content: JSON.stringify({ state }) });
+
+        const result = await runJudgmentCycle({
+          llm,
+          registry,
+          bot,
+          system,
+          history,
+          maxTokens: 512,
+          bridge,
+          logger,
+          sessionId,
         });
 
-        await recordAndLearnFromTool(sessionId, executed.name, executed.args, executed.result);
-
-        const decision = watchdog.recordToolResult(executed.name, executed.result.ok);
-        if (decision === "switch_task") {
-          await logger.log("watchdog", sessionId, { decision, name: executed.name });
-        } else if (decision === "stop") {
-          await logger.log("watchdog", sessionId, { decision, name: executed.name });
-          await bridge.sendEvent({
-            type: "event",
-            payload: { kind: "stuck", detail: `${executed.name} が繰り返し失敗したため停止した` },
-          });
-          shouldStop = true;
-          break;
+        if (result.text) {
+          history.push({ role: "assistant", content: result.text });
         }
-      }
 
-      if (history.length > MAX_HISTORY_MESSAGES) {
-        history.splice(0, history.length - MAX_HISTORY_MESSAGES);
+        for (const executed of result.executed) {
+          history.push({
+            role: "tool",
+            content: `${executed.name}: ${executed.result.ok ? "ok" : "failed"} - ${executed.result.message}`,
+          });
+
+          await recordAndLearnFromTool(sessionId, executed.name, executed.args, executed.result);
+
+          const decision = watchdog.recordToolResult(executed.name, executed.result.ok);
+          if (decision === "switch_task") {
+            await logger.log("watchdog", sessionId, { decision, name: executed.name });
+          } else if (decision === "stop") {
+            await logger.log("watchdog", sessionId, { decision, name: executed.name });
+            await bridge.sendEvent({
+              type: "event",
+              payload: { kind: "stuck", detail: `${executed.name} が繰り返し失敗したため停止した` },
+            });
+            shouldStop = true;
+            break;
+          }
+        }
+
+        if (history.length > MAX_HISTORY_MESSAGES) {
+          history.splice(0, history.length - MAX_HISTORY_MESSAGES);
+        }
+      } catch (error) {
+        await logger.log("error", sessionId, {
+          phase: "judgment_cycle",
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
 
       if (shouldStop) {
@@ -261,17 +271,35 @@ async function main(): Promise<void> {
 
   setInterval(() => {
     if (!sessionId || !bridge) return;
-    const state = buildState(bot);
-    void bridge.sendEvent({
-      type: "status",
-      payload: { hp: state.hp, food: state.food, position: state.position, goal_title: currentGoal },
-    });
-    control.touchLastEvent();
+    try {
+      const state = buildState(bot);
+      void bridge.sendEvent({
+        type: "status",
+        payload: { hp: state.hp, food: state.food, position: state.position, goal_title: currentGoal },
+      });
+      control.touchLastEvent();
+    } catch (error) {
+      // bot未spawn等。ここで落とすとプロセス全体が死ぬので、ログだけ残して次の間隔を待つ。
+      void logger?.log("error", sessionId, {
+        phase: "status_report",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }, config.statusIntervalMs);
 
   control.start();
   console.log(`[haru-minecraft] control server listening on :${config.brainPort} (${nowJstIso()})`);
 }
+
+// 最後の安全網: ここまでの個別のtry/catchで想定していない例外が漏れても、
+// Node既定の「unhandled rejection/exceptionでプロセス終了」は避ける
+// (常時稼働させる前提のプロセスなので、ログに残して動き続ける方を優先する)。
+process.on("unhandledRejection", (reason) => {
+  console.error("[haru-minecraft] unhandledRejection", reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("[haru-minecraft] uncaughtException", error);
+});
 
 main().catch((error) => {
   console.error("[haru-minecraft] 起動に失敗した", error);
