@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OllamaProvider, parseOpenAiResponse } from "../src/brain/adapters/ollama.js";
-import { parseHomeLlmContent } from "../src/brain/adapters/homeLlm.js";
+import { HomeLlmProvider, parseHomeLlmContent } from "../src/brain/adapters/homeLlm.js";
 
 function jsonResponse(body: unknown): Response {
   return { ok: true, status: 200, json: async () => body } as unknown as Response;
@@ -71,6 +71,34 @@ describe("OllamaProvider (sends Authorization like the FastAPI spec requires)", 
 
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
     expect(headers.Authorization).toBeUndefined();
+  });
+});
+
+describe("HomeLlmProvider (role mapping, real backend only accepts system/user/assistant)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue(jsonResponse({ content: "{}" }));
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('maps a "tool" role message to "user" (observed in production: real /chat rejects "tool" with 422)', async () => {
+    const provider = new HomeLlmProvider("http://127.0.0.1:8000", "", 1000);
+    await provider.chat({
+      system: "s",
+      messages: [
+        { role: "tool", content: "move_to: ok - 到着した" },
+        { role: "assistant", content: "ok" },
+      ],
+      tools: [],
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as { messages: Array<{ role: string }> };
+    expect(body.messages.map((m) => m.role)).toEqual(["system", "user", "assistant"]);
   });
 });
 

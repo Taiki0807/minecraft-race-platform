@@ -47,8 +47,17 @@ export class HomeLlmProvider implements LLMProvider {
   }
 }
 
+/**
+ * 実機で確認済み: home-llm の /chat は role を "system"|"user"|"assistant" しか
+ * 受け付けず(local-ai-creator-studio/lib/ai/local-llm.ts の Message型と一致)、
+ * それ以外(ここでは"tool": ツール実行結果のフィードバック)を送ると422で拒否される。
+ * ツール結果は環境からの観測として"user"に寄せる。
+ */
 function toHomeLlmMessages(messages: ChatMessage[]) {
-  return messages.map((m) => ({ role: m.role, content: m.content }));
+  return messages.map((m) => ({
+    role: m.role === "tool" ? "user" : m.role,
+    content: m.content,
+  }));
 }
 
 function buildSystemWithToolInstructions(system: string, tools: ToolDefinition[]): string {
