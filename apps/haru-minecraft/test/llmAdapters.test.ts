@@ -100,6 +100,27 @@ describe("HomeLlmProvider (role mapping, real backend only accepts system/user/a
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as { messages: Array<{ role: string }> };
     expect(body.messages.map((m) => m.role)).toEqual(["system", "user", "assistant"]);
   });
+
+  it("embeds a few-shot example and an explicit nudge toward choosing an action tool, not just speak", async () => {
+    const provider = new HomeLlmProvider("http://127.0.0.1:8000", "", 1000);
+    await provider.chat({ system: "persona", messages: [], tools: [] });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const systemContent = body.messages[0]?.content ?? "";
+    expect(systemContent).toContain("[出力例]");
+    expect(systemContent).toContain("move_to");
+    expect(systemContent).toContain("speakで喋るだけで終わらせない");
+  });
+
+  it("lowers temperature for more reliable JSON-format compliance", async () => {
+    const provider = new HomeLlmProvider("http://127.0.0.1:8000", "", 1000);
+    await provider.chat({ system: "s", messages: [], tools: [] });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as { temperature: number };
+    expect(body.temperature).toBe(0.4);
+  });
 });
 
 describe("parseHomeLlmContent (home-llm compatibility mode)", () => {

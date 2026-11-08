@@ -33,7 +33,10 @@ export class HomeLlmProvider implements LLMProvider {
       body: JSON.stringify({
         messages,
         max_new_tokens: request.maxTokens ?? 256,
-        temperature: 0.7,
+        // 実機検証で判明: temperatureが高いとJSON形式を無視して自由な感想文だけを
+        // 返すことが多く、行動(ツール呼び出し)にほぼ繋がらなかった。下げて
+        // 指示への追従性を優先する(個性のゆらぎは多少失うトレードオフ)。
+        temperature: 0.4,
       }),
       signal: AbortSignal.timeout(this.timeoutMs),
     });
@@ -65,13 +68,23 @@ function buildSystemWithToolInstructions(system: string, tools: ToolDefinition[]
     .map((tool) => `- ${tool.name}(${JSON.stringify(tool.parameters.properties)}): ${tool.description}`)
     .join("\n");
 
+  // 実機検証で判明: 指示だけでは自由な感想文(JSON無し)を返すことが多く、
+  // speak以外のツールをほぼ選ばなかった。小さいモデルには具体例(few-shot)が
+  // 一番効くため、状況→出力の対応例を1つ入れる。
   return [
     system,
     "",
-    "[出力形式]",
-    "次の1個のJSONオブジェクトだけを出力すること。説明文や前後の文章は書かない。",
+    "[出力形式(厳守)]",
+    "次の1個のJSONオブジェクトだけを出力する。説明文や前置き、JSON以外の文章は書かない。",
     '{"tool_calls":[{"name":"ツール名","args":{...}}],"text":"任意の一言(省略可)"}',
-    "ツールを使わない場合は tool_calls を空配列にする。",
+    "",
+    "[出力例]",
+    "状況: 近くにクリーパーがいる、何も持っていない",
+    '出力: {"tool_calls":[{"name":"speak","args":{"text":"クリーパーがいるな、離れよう"}},{"name":"move_to","args":{"x":10,"y":64,"z":-5}}]}',
+    "",
+    "[重要] speakで喋るだけで終わらせない。状況を見て、move_to・collect・dig_block等の",
+    "行動ツールも毎回できるだけ1つ選ぶこと。tool_callsを空配列にするのは、",
+    "本当に何も選べない時だけにする。",
     "",
     "[使えるツール]",
     toolList,
