@@ -36,6 +36,10 @@ minecraftServer:
     # 配信用の観戦クライアント(Gonzales2、購入済みの本アカウント)が /gamemode spectator や
     # /tp を自分で打てるようにOP権限を付与する。OPは全コマンドの実行権限を持つ。
     OPS: "Gonzales2"
+    # 実機で確認: ops.json が既に存在すると(初回起動時に空のまま作られていた)、
+    # OPS環境変数の処理が既定でスキップされ、何度再起動してもOPが付与されなかった。
+    # SYNCHRONIZEにして、起動ごとにOPSの内容を既存ファイルへ反映させる。
+    EXISTING_OPS_FILE: "SYNCHRONIZE"
 
 resources:
   requests:
