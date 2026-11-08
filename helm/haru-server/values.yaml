@@ -1,0 +1,59 @@
+image:
+  repository: itzg/minecraft-server
+  tag: java21
+  pullPolicy: IfNotPresent
+
+minecraftServer:
+  eula: true
+  type: PAPER
+  version: "1.21.9"
+
+  hardcore: false
+  difficulty: normal
+  gameMode: survival
+  # Haru本人 + 観戦用クライアント(OBS用カメラ)の2枠。
+  maxPlayers: 2
+  pvp: false
+  # haru-body(Mineflayer)はMC_AUTH=offlineで接続する(ハル用に正規Minecraftアカウントを
+  # 別途購入しない前提)。プライベートサーバーのため公開はしない。
+  onlineMode: false
+  enforceSecureProfile: false
+
+  memory: 1536M
+  motd: "Haru's Minecraft World - AI VTuber autoplay"
+
+  serviceType: ClusterIP
+  servicePort: 25565
+
+  rcon:
+    enabled: false
+
+  extraEnv:
+    ENABLE_COMMAND_BLOCK: "false"
+    SPAWN_PROTECTION: "0"
+    VIEW_DISTANCE: "8"
+    SIMULATION_DISTANCE: "6"
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 3Gi
+
+# race_worker(k8s-race-worker1)とは別のVM/ノードに固定し、配信中のレースと
+# ハルの自動プレイが互いのリソース・ワールドに影響しないようにする。
+nodeSelector:
+  workload: haru-minecraft
+
+persistence:
+  dataDir:
+    enabled: true
+    Size: 10Gi
+    storageClass: local-path
+    accessModes:
+      - ReadWriteOnce
+
+mcbackup:
+  enabled: false

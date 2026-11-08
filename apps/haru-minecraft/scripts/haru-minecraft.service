@@ -1,0 +1,16 @@
+[Unit]
+Description=haru-minecraft (ハル・マイクラ: Mineflayer操作・判断ループ・記憶・Creator Studio連携を1プロセスで)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/minecraft-race-platform/apps/haru-minecraft
+ExecStart=/usr/bin/npx tsx src/index.ts
+Restart=on-failure
+RestartSec=5
+EnvironmentFile=/home/ubuntu/minecraft-race-platform/apps/haru-minecraft/.env
+
+[Install]
+WantedBy=multi-user.target

@@ -75,3 +75,35 @@ ssh ubuntu@192.168.100.7
 ```
 
 The next stage installs the k3s agent and applies the node label `workload=minecraft-race`. The k3s join token must not be stored in this Terraform directory or committed to Git.
+
+## Haru Minecraft worker (VM 109, `k8s-haru-worker1`)
+
+Same linked-clone pattern as the race worker above, kept as a **separate VM** so Haru's
+automated play never competes with a live race for CPU/RAM, and so her world is never
+touched by the race platform's match lifecycle.
+
+Differences from the race worker:
+
+- Meant to run **continuously**, not just during events — `on_boot = true`, so it restarts
+  automatically if the Proxmox host reboots.
+- Controlled by its own variable, `haru_vm_started`, independent of `vm_started`.
+
+Same safety process applies — check before creating:
+
+```bash
+ping -c 3 192.168.100.9
+qm status 109
+```
+
+`qm status 109` should report that the VM does not exist yet. Then:
+
+```bash
+terraform plan -out=haru-worker.tfplan
+# check the plan touches only the haru_worker resource
+terraform apply haru-worker.tfplan
+```
+
+First apply leaves it stopped (`haru_vm_started = false`). Once you've confirmed it boots
+correctly (`ssh ubuntu@192.168.100.9`, join it to k3s, label it `workload=haru-minecraft`),
+set `haru_vm_started = true` in `terraform.tfvars` and re-apply — from then on it stays
+running continuously, including across Proxmox host restarts.

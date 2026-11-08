@@ -26,3 +26,9 @@ variable "vm_started" {
   type        = bool
   default     = false
 }
+
+variable "haru_vm_started" {
+  description = "Start the Haru Minecraft worker VM after creation. Meant to run continuously (on_boot=true) once confirmed working; keep false only for the first apply."
+  type        = bool
+  default     = false
+}

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: haru-server-tailscale
+  namespace: haru-minecraft
+  labels:
+    app.kubernetes.io/name: haru-minecraft
+    app.kubernetes.io/instance: haru-server
+  annotations:
+    tailscale.com/hostname: haru-minecraft
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app: haru-server-minecraft
+  ports:
+    - name: minecraft-java
+      port: 25565
+      targetPort: 25565
+      protocol: TCP

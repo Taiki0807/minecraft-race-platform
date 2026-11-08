@@ -1,6 +1,8 @@
 proxmox_endpoint = "https://192.168.1.200:8006/"
 proxmox_insecure = true
 vm_started       = false
+# ハルのVMは常時稼働させる前提。最初のapplyで作成を確認したらtrueに切り替える
+haru_vm_started  = false
 
 # Paste only a PUBLIC key here. Never put a private key in this file.
 ssh_public_key = "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY"

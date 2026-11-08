@@ -1,0 +1,26 @@
+{
+  "name": "haru-minecraft",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ハル・マイクラ連携契約 v1 の実装: bridge / brain / skills / memory",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "minecraft-data": "^3.78.0",
+    "mineflayer": "^4.22.0",
+    "mineflayer-pathfinder": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

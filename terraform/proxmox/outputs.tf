@@ -7,3 +7,13 @@ output "race_worker" {
     started    = var.vm_started
   }
 }
+
+output "haru_worker" {
+  description = "Created Haru Minecraft worker details"
+  value = {
+    vm_id      = proxmox_virtual_environment_vm.haru_worker.vm_id
+    name       = proxmox_virtual_environment_vm.haru_worker.name
+    ip_address = "192.168.100.9"
+    started    = var.haru_vm_started
+  }
+}

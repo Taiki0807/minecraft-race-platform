@@ -1,0 +1,453 @@
+<title>ハル・ブレイン セットアップ手順</title>
+<style>
+  :root {
+    --bg: #f5f4f1;
+    --surface: #ffffff;
+    --surface-sunken: #eceae5;
+    --border: #ddd9d1;
+    --text: #1c1a16;
+    --text-dim: #6b6659;
+    --accent: #5a7d4a;
+    --accent-ink: #2f4323;
+    --amber: #a9772c;
+    --code-bg: #1c1a16;
+    --code-text: #eae6dc;
+    --code-accent: #9fd98a;
+    --done: #4b7a3f;
+    --pending: #a9772c;
+    --shadow: 0 1px 2px rgba(28,26,22,0.06), 0 8px 24px rgba(28,26,22,0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15140f;
+      --surface: #1d1c16;
+      --surface-sunken: #262419;
+      --border: #38352a;
+      --text: #efece2;
+      --text-dim: #a39d8c;
+      --accent: #8fc47a;
+      --accent-ink: #d7f0ca;
+      --amber: #d6a85a;
+      --code-bg: #0e0d0a;
+      --code-text: #e8e4d8;
+      --code-accent: #a8e495;
+      --done: #8fc47a;
+      --pending: #d6a85a;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15140f;
+    --surface: #1d1c16;
+    --surface-sunken: #262419;
+    --border: #38352a;
+    --text: #efece2;
+    --text-dim: #a39d8c;
+    --accent: #8fc47a;
+    --accent-ink: #d7f0ca;
+    --amber: #d6a85a;
+    --code-bg: #0e0d0a;
+    --code-text: #e8e4d8;
+    --code-accent: #a8e495;
+    --done: #8fc47a;
+    --pending: #d6a85a;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", -apple-system, "Hiragino Sans", sans-serif;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  code, pre, .mono, .env-name {
+    font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  h1, h2, h3 { text-wrap: balance; }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 48px;
+  }
+  @media (max-width: 860px) {
+    .page { grid-template-columns: 1fr; }
+    nav.toc { display: none; }
+  }
+
+  header.hero {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  header.hero h1 {
+    font-size: clamp(26px, 4vw, 34px);
+    margin: 0;
+    font-weight: 650;
+  }
+  header.hero p.lede {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 640px;
+    margin: 0;
+  }
+
+  .scope {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .scope-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .scope-card .label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .scope-card.build { border-left: 3px solid var(--pending); }
+  .scope-card.existing { border-left: 3px solid var(--done); }
+
+  nav.toc {
+    position: sticky;
+    top: 40px;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13.5px;
+  }
+  nav.toc a {
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 5px;
+    border-left: 2px solid transparent;
+  }
+  nav.toc a:hover { color: var(--text); background: var(--surface-sunken); }
+  nav.toc .step-no { font-variant-numeric: tabular-nums; color: var(--accent-ink); margin-right: 6px; font-weight: 600; }
+
+  main { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+
+  section.step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 26px;
+    box-shadow: var(--shadow);
+    scroll-margin-top: 24px;
+  }
+  section.step .step-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  section.step .step-num {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--accent-ink);
+    font-size: 14px;
+    background: var(--surface-sunken);
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+  section.step h2 { margin: 0; font-size: 19px; font-weight: 650; }
+  section.step .desc { color: var(--text-dim); margin: 6px 0 16px; max-width: 70ch; }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 10px 0;
+  }
+  pre .cmt { color: var(--code-accent); opacity: 0.75; }
+
+  .check {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: var(--surface-sunken);
+    border-radius: 6px;
+    font-size: 13.5px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .check .mark { color: var(--accent-ink); font-weight: 700; flex-shrink: 0; }
+
+  table.envtable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  .table-scroll { overflow-x: auto; }
+  table.envtable th, table.envtable td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.envtable th {
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .env-name { color: var(--amber); white-space: nowrap; }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 99px;
+    letter-spacing: 0.02em;
+  }
+  .pill.todo { background: color-mix(in srgb, var(--pending) 18%, transparent); color: var(--pending); }
+  .pill.existing { background: color-mix(in srgb, var(--done) 18%, transparent); color: var(--done); }
+
+  .finalcheck {
+    display: grid;
+    gap: 8px;
+  }
+  .finalcheck .item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 14px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .finalcheck .item:last-child { border-bottom: none; }
+  .finalcheck .box {
+    width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
+    border: 1.5px solid var(--text-dim); border-radius: 3px;
+  }
+
+  details.trouble {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 10px;
+    background: var(--surface-sunken);
+  }
+  details.trouble summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
+  details.trouble p { margin: 8px 0 0; font-size: 13.5px; color: var(--text-dim); }
+
+  footer.note {
+    grid-column: 1 / -1;
+    margin-top: 12px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;650;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<div class="page">
+
+  <header class="hero">
+    <span class="eyebrow">haru-minecraft / Windows セットアップ</span>
+    <h1>ハル・ブレイン セットアップ手順</h1>
+    <p class="lede">
+      AI VTuber「ハル」が自動でマイクラをプレイする仕組みのうち、「頭」(判断ループ・記憶・Creator Studio連携)を
+      このWindows機(GPU搭載・ローカルLLM/TTSと同じ機)に導入するための作業指示書。
+    </p>
+    <div class="scope">
+      <div class="scope-card build">
+        <div class="label">このマシンに新しく用意するもの</div>
+        apps/haru-minecraft(ハルの「頭」) — この手順の対象
+      </div>
+      <div class="scope-card existing">
+        <div class="label">既にこのマシンで動いていて、変更不要なもの</div>
+        Creator Studio / ローカルLLM(/chat) / Irodori TTS
+      </div>
+      <div class="scope-card build">
+        <div class="label">別担当者が同じマシン上に用意する予定</div>
+        FastAPIによるGPU推論サービス(別紙の依頼仕様書を参照)
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#step1"><span class="step-no">1</span>前提確認</a>
+    <a href="#step2"><span class="step-no">2</span>コード配置</a>
+    <a href="#step3"><span class="step-no">3</span>依存インストール</a>
+    <a href="#step4"><span class="step-no">4</span>.env 設定</a>
+    <a href="#step5"><span class="step-no">5</span>起動確認</a>
+    <a href="#step6"><span class="step-no">6</span>常時稼働化</a>
+    <a href="#step7"><span class="step-no">7</span>GPUサービス連携</a>
+    <a href="#final"><span class="step-no">✓</span>最終チェック</a>
+  </nav>
+
+  <main>
+
+    <section class="step" id="step1">
+      <div class="step-head">
+        <span class="step-num">STEP 1</span>
+        <h2>前提確認</h2>
+      </div>
+      <p class="desc">始める前に、このマシンから到達できるものを確認する。</p>
+      <div class="check"><span class="mark">□</span>Node.js 22以上が入っている(<code>node -v</code>)</div>
+      <div class="check"><span class="mark">□</span>Proxmox側の <code>haru-body</code>(ポート3300)にこのマシンから到達できる(担当のネットワーク経路/Tailscale等)</div>
+      <div class="check"><span class="mark">□</span>同一マシンの Creator Studio(通常 <code>http://127.0.0.1:3100</code>)に到達できる</div>
+    </section>
+
+    <section class="step" id="step2">
+      <div class="step-head">
+        <span class="step-num">STEP 2</span>
+        <h2>コードをこのマシンに配置する</h2>
+      </div>
+      <p class="desc">
+        <code>minecraft-race-platform</code> リポジトリの <code>apps/haru-minecraft</code> ディレクトリを
+        このマシン上に用意する(cloneでもコピーでも、普段使っている方法でよい)。
+      </p>
+      <pre><span class="cmt"># 例: 既にリポジトリをこのマシンに持っている場合</span>
+cd minecraft-race-platform
+git pull
+cd apps\haru-minecraft</pre>
+    </section>
+
+    <section class="step" id="step3">
+      <div class="step-head">
+        <span class="step-num">STEP 3</span>
+        <h2>依存関係をインストール</h2>
+      </div>
+      <pre>cd apps\haru-minecraft
+npm install</pre>
+      <div class="check"><span class="mark">□</span>エラー無く完了する(警告は無視してよい)</div>
+    </section>
+
+    <section class="step" id="step4">
+      <div class="step-head">
+        <span class="step-num">STEP 4</span>
+        <h2>.env を設定する</h2>
+      </div>
+      <p class="desc">
+        <code>.env.example</code> を <code>.env</code> としてコピーし、以下の値を記入する。
+        Secretはこのファイルにのみ書き、他に貼らないこと(<code>.env</code> はgit管理外)。
+      </p>
+      <pre>copy .env.example .env</pre>
+
+      <div class="table-scroll">
+        <table class="envtable">
+          <tr><th>変数名</th><th>説明</th><th>値の出どころ</th></tr>
+          <tr><td class="env-name">STUDIO_BASE_URL</td><td>Creator Studioの受信先</td><td>同一機なら <code>http://127.0.0.1:3100</code>(既定のままでよい)</td></tr>
+          <tr><td class="env-name">STUDIO_TOKEN</td><td>Creator Studio認証用</td><td>Creator Studio側 <code>.env.local</code> の <code>MINECRAFT_BRIDGE_TOKEN</code> と<b>同じ値</b></td></tr>
+          <tr><td class="env-name">BRAIN_PORT</td><td>このプロセス自身の制御ポート</td><td>既定の <code>3200</code> でよい</td></tr>
+          <tr><td class="env-name">BRAIN_TOKEN</td><td><code>/control</code> <code>/status</code> の保護</td><td>任意のランダム値(本番では設定推奨。空だと認証無し)</td></tr>
+          <tr><td class="env-name">LLM_PROVIDER</td><td><code>home-llm</code> または <code>ollama</code></td><td>最初は <code>home-llm</code>。STEP 7でFastAPI完成後に <code>ollama</code> へ切替</td></tr>
+          <tr><td class="env-name">LOCAL_LLM_URL / LOCAL_LLM_TOKEN</td><td>既存のローカルLLM(/chat)</td><td>既存の値をそのまま流用</td></tr>
+          <tr><td class="env-name">BODY_BASE_URL</td><td>haru-body(Proxmox側)の接続先</td><td><code>http://&lt;Proxmox側アドレス&gt;:3300</code></td></tr>
+          <tr><td class="env-name">BODY_TOKEN</td><td>haru-body認証用</td><td>Proxmox側 <code>apps/haru-body/.env</code> の <code>BODY_TOKEN</code> と<b>同じ値</b></td></tr>
+          <tr><td class="env-name">HARU_PERSONA_PROMPT</td><td>ハルの人格プロンプト</td><td>空でよい(最低限のフォールバック文が自動で入る)</td></tr>
+        </table>
+      </div>
+      <div class="check"><span class="mark">□</span><code>STUDIO_TOKEN</code> と <code>BODY_TOKEN</code> は、相手側の値と文字単位で一致しているか必ず見比べる</div>
+    </section>
+
+    <section class="step" id="step5">
+      <div class="step-head">
+        <span class="step-num">STEP 5</span>
+        <h2>起動して配線を確認する</h2>
+      </div>
+      <pre>npm run dev</pre>
+      <p class="desc">起動ログに次が出るか確認する:</p>
+      <pre><span class="cmt">[haru-minecraft] haru-body に接続した (tools: 12)</span>
+[haru-minecraft] control server listening on :3200 (...)</pre>
+      <p class="desc">別のコマンドプロンプトから:</p>
+      <pre>curl http://127.0.0.1:3200/status</pre>
+      <div class="check"><span class="mark">□</span><code>{"online":true,"state":"idle",...}</code> が返る</div>
+      <details class="trouble">
+        <summary>「haru-body に接続した」が出ない場合</summary>
+        <p><code>BODY_BASE_URL</code> の到達性、<code>BODY_TOKEN</code> の一致、Proxmox側で <code>haru-body</code> 自体が起動しているかを確認する。</p>
+      </details>
+    </section>
+
+    <section class="step" id="step6">
+      <div class="step-head">
+        <span class="step-num">STEP 6</span>
+        <h2>常時稼働化(タスクスケジューラ登録)</h2>
+      </div>
+      <p class="desc">確認が済んだら、起動時自動実行・クラッシュ時再起動するよう登録する。</p>
+      <pre>npm run build
+powershell -ExecutionPolicy Bypass -File scripts\register-task.ps1</pre>
+      <div class="check"><span class="mark">□</span><code>Start-ScheduledTask -TaskName haru-minecraft</code> で起動し、<code>/status</code> が応答する</div>
+    </section>
+
+    <section class="step" id="step7">
+      <div class="step-head">
+        <span class="step-num">STEP 7</span>
+        <h2>GPU推論サービス(FastAPI)が出来たら</h2>
+        <span class="pill todo">未着手・担当者待ち</span>
+      </div>
+      <p class="desc">
+        別紙「GPU推論サービス 依頼仕様書」に基づいてFastAPIサービスが用意できたら、
+        <code>.env</code> を書き換えてタスクを再起動する。
+      </p>
+      <pre>LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=&lt;FastAPIサービスのURL&gt;
+OLLAMA_MODEL=&lt;モデル名&gt;</pre>
+      <pre>Restart-ScheduledTask -TaskName haru-minecraft</pre>
+      <div class="check"><span class="mark">□</span><code>logs/*.jsonl</code> の <code>decision</code> ログに <code>tool_calls</code> が正しい形式で入っているか確認する</div>
+    </section>
+
+    <section class="step" id="final">
+      <div class="step-head">
+        <span class="step-num">✓</span>
+        <h2>最終チェックリスト</h2>
+      </div>
+      <div class="finalcheck">
+        <div class="item"><div class="box"></div>Node.js・ネットワーク到達性を確認した(STEP 1)</div>
+        <div class="item"><div class="box"></div><code>npm install</code> が完了した(STEP 3)</div>
+        <div class="item"><div class="box"></div><code>.env</code> の各トークンが相手側と一致している(STEP 4)</div>
+        <div class="item"><div class="box"></div><code>npm run dev</code> で haru-body への接続ログが出た(STEP 5)</div>
+        <div class="item"><div class="box"></div><code>/status</code> が応答する(STEP 5)</div>
+        <div class="item"><div class="box"></div>タスクスケジューラに登録し、再起動後も動くことを確認した(STEP 6)</div>
+        <div class="item"><div class="box"></div>(FastAPI完成後)<code>LLM_PROVIDER=ollama</code> に切り替えて <code>tool_calls</code> が返ることを確認した(STEP 7)</div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="note">
+    この手順はコード・設定ファイルの作成時点での想定に基づく(実機未検証)。詰まった箇所は
+    <code>apps/haru-minecraft/docs/verification-runbook.md</code> の段階的確認手順も参照。
+  </footer>
+
+</div>
