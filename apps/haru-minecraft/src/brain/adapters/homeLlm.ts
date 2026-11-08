@@ -81,6 +81,14 @@ export function parseHomeLlmContent(content: string): LLMResponse {
     return { toolCalls: [], text: content };
   }
 
+  const parsed = tryParseHomeLlmJson(jsonText) ?? tryParseHomeLlmJson(repairUnbalancedBrackets(jsonText));
+  if (!parsed) {
+    return { toolCalls: [], text: content };
+  }
+  return parsed;
+}
+
+function tryParseHomeLlmJson(jsonText: string): LLMResponse | null {
   try {
     const parsed = JSON.parse(jsonText) as HomeLlmJson;
     const toolCalls: ToolCall[] = (parsed.tool_calls ?? [])
@@ -94,8 +102,61 @@ export function parseHomeLlmContent(content: string): LLMResponse {
       }));
     return { toolCalls, text: typeof parsed.text === "string" ? parsed.text : undefined };
   } catch {
-    return { toolCalls: [], text: content };
+    return null;
   }
+}
+
+/**
+ * 小さいモデルは配列の `]` を書き忘れて、代わりに `}` を1つ多く出すなど、
+ * 括弧の対応を間違えることがある(実機検証で確認済み: tool_calls配列の
+ * 要素を書き終えた後、`]` を書かずに `}` を出してオブジェクトを閉じようとするケース)。
+ * 文字列リテラルの中は数えない。対応しない閉じ括弧(モデルの書き間違い)は
+ * 捨て、最後まで開いたままの `{`/`[` だけを末尾に補って再試行する。
+ */
+function repairUnbalancedBrackets(text: string): string {
+  const stack: Array<"{" | "["> = [];
+  let inString = false;
+  let escaped = false;
+  let repaired = "";
+
+  for (const ch of text) {
+    if (inString) {
+      repaired += ch;
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      repaired += ch;
+      continue;
+    }
+
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+      repaired += ch;
+      continue;
+    }
+
+    if (ch === "}" || ch === "]") {
+      const expected = ch === "}" ? "{" : "[";
+      if (stack[stack.length - 1] === expected) {
+        stack.pop();
+        repaired += ch;
+      }
+      // 対応する開き括弧が無い閉じ括弧は、モデルの書き間違いとして読み飛ばす。
+      continue;
+    }
+
+    repaired += ch;
+  }
+
+  for (let i = stack.length - 1; i >= 0; i--) {
+    repaired += stack[i] === "{" ? "}" : "]";
+  }
+  return repaired;
 }
 
 function extractFirstJsonObject(text: string): string | null {

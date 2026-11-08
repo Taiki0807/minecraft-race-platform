@@ -94,6 +94,24 @@ describe("parseHomeLlmContent (home-llm compatibility mode)", () => {
     expect(result.text).toBe("ごめん、よくわからない");
   });
 
+  it("repairs a real failure seen in production: model forgot to close the tool_calls array", () => {
+    // 実機のログに実際に出た壊れたJSON(]を書かずにオブジェクトを閉じようとした)。
+    const broken =
+      '{"tool_calls":[{"name":"speak","args":{"text":"周りには敵が結構いるな。どこか安全な場所を探さないとな。"}},' +
+      '{"name":"move_to","args":{"x":281.5,"y":82,"z":648.5}}}';
+    const result = parseHomeLlmContent(broken);
+    expect(result.toolCalls).toEqual([
+      { name: "speak", args: { text: "周りには敵が結構いるな。どこか安全な場所を探さないとな。" } },
+      { name: "move_to", args: { x: 281.5, y: 82, z: 648.5 } },
+    ]);
+  });
+
+  it("does not mistake brackets inside a string value for structural brackets when repairing", () => {
+    const broken = '{"tool_calls":[{"name":"speak","args":{"text":"括弧{}や[]を含む発言"}}}';
+    const result = parseHomeLlmContent(broken);
+    expect(result.toolCalls).toEqual([{ name: "speak", args: { text: "括弧{}や[]を含む発言" } }]);
+  });
+
   it("ignores tool_calls entries missing a string name", () => {
     const result = parseHomeLlmContent('{"tool_calls":[{"args":{}},{"name":"eat","args":{}}]}');
     expect(result.toolCalls).toEqual([{ name: "eat", args: {} }]);
