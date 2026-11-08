@@ -7,7 +7,7 @@ Mineflayer(ハルの「体」)には画面が無い。配信にマイクラの�
 ## 事前準備(サーバー側、済み)
 
 `helm/haru-server/values.yaml` に観戦用の2枠目(`maxPlayers: 2`)とOP権限
-(観戦用アカウント名は `HaruCamera` で決定)を用意した。反映するには:
+(観戦用アカウントは購入済みの本アカウント `Gonzales2` に設定)を用意した。反映するには:
 
 ```bash
 helm upgrade haru-server minecraft-server-charts/minecraft \
@@ -15,17 +15,13 @@ helm upgrade haru-server minecraft-server-charts/minecraft \
   -n haru-minecraft
 ```
 
-`online-mode=false`なので、観戦用アカウントも正式なMinecraftアカウント購入は不要
-(任意のユーザー名でログインできる)。
-
 ## 1. 観戦用クライアントを起動する
 
 OBSを動かす予定のマシン(配信用PC)に、本物のMinecraft Java Edition クライアントを
-用意し、以下で接続する:
+用意し(`Gonzales2`のアカウントでログイン)、以下で接続する:
 
 - サーバーアドレス: `haru-minecraft.tail5a3e5a.ts.net`(または対応するIPアドレス。
   `kubectl get svc -n haru-minecraft` で確認)
-- ユーザー名: `HaruCamera`
 
 接続できたら、チャット欄で自分にスペクテイターモードを与える:
 

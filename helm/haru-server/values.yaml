@@ -33,8 +33,9 @@ minecraftServer:
     SPAWN_PROTECTION: "0"
     VIEW_DISTANCE: "8"
     SIMULATION_DISTANCE: "6"
-    # 配信用の観戦クライアント(HaruCamera)が /gamemode spectator を自分で打てるようにOP権限を付与する。
-    OPS: "HaruCamera"
+    # 配信用の観戦クライアント(Gonzales2、購入済みの本アカウント)が /gamemode spectator や
+    # /tp を自分で打てるようにOP権限を付与する。OPは全コマンドの実行権限を持つ。
+    OPS: "Gonzales2"
 
 resources:
   requests:
