@@ -98,13 +98,13 @@ async function main(): Promise<void> {
       running = true;
       paused = false;
       void startSession(sessionNote);
-    } else if (command === "stop") {
+    } else if (command === "stop" && running) {
       running = false;
       void stopSession(sessionNote ?? "stop_requested");
-    } else if (command === "pause") {
+    } else if (command === "pause" && running && !paused) {
       paused = true;
       control.setState("paused");
-    } else if (command === "resume") {
+    } else if (command === "resume" && running && paused) {
       paused = false;
       control.setState("running");
     }
