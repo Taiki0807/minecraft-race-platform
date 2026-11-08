@@ -49,7 +49,7 @@ cp .env.example .env
 - `MC_HOST`/`MC_PORT`/`MC_USERNAME`/`MC_AUTH` — このVM上の、または到達可能な
   Minecraftサーバー(`helm/haru-server`で構築したもの)
 - `STUDIO_BASE_URL` — Mac(Creator Studio)の実アドレス
-- `LLM_PROVIDER`/`OLLAMA_BASE_URL` または `LOCAL_LLM_URL` — Windows側のLLM
+- `LLM_PROVIDER=haru-chat`(既定) + `LOCAL_LLM_URL`/`LOCAL_LLM_TOKEN` — Windows側の`/chat`
 
 ## 3. 動作確認(systemd登録前に一度手動で)
 

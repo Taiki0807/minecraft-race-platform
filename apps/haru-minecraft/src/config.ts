@@ -28,16 +28,25 @@ export const config = {
   brainPort: Number(optional("BRAIN_PORT", "3200")),
   brainToken: process.env.BRAIN_TOKEN ?? "",
 
-  /** (B) ローカルLLM。どちらか一方を設定する。 */
-  llmProvider: optional("LLM_PROVIDER", "home-llm") as "ollama" | "home-llm",
+  /**
+   * (B) LLM。
+   * - "haru-chat": 2026-11-09仕様改定版の /chat。ネイティブtools対応、本命
+   * - "home-llm": 改定前の /chat。JSON指示埋め込みの互換モード(もう古い)
+   * - "ollama": 別エンドポイント(将来、別モデルに切り替える場合用)
+   */
+  llmProvider: optional("LLM_PROVIDER", "haru-chat") as "haru-chat" | "ollama" | "home-llm",
+
+  // haru-chat と home-llm は同じ実体(/chat, chat.hosokawa-lab.dev)を指す。
+  // Creator Studio の lib/ai/local-llm.ts と同じURL/トークン。
+  homeLlmBaseUrl: optional("LOCAL_LLM_URL", "https://chat.hosokawa-lab.dev"),
+  homeLlmToken: process.env.LOCAL_LLM_TOKEN ?? "",
+  // 指示が無いときにハルが自分で次の行動を決めるモード。既定で有効
+  // (このプロセスには「視聴者からの具体的な指示」という概念がまだ無く、常にambientな判断のため)。
+  haruChatAutonomous: optional("HARU_CHAT_AUTONOMOUS", "true") === "true",
 
   ollamaBaseUrl: optional("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
   ollamaModel: optional("OLLAMA_MODEL", "qwen2.5:14b"),
   ollamaToken: process.env.OLLAMA_TOKEN ?? "",
-
-  // Creator Studio の lib/ai/local-llm.ts と同じ実体(/chat, Bearer token)。
-  homeLlmBaseUrl: optional("LOCAL_LLM_URL", "https://chat.hosokawa-lab.dev"),
-  homeLlmToken: process.env.LOCAL_LLM_TOKEN ?? "",
 
   llmTimeoutMs: Number(optional("LLM_TIMEOUT_MS", "60000")),
 

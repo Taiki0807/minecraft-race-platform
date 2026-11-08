@@ -81,4 +81,55 @@ describe("runJudgmentCycle", () => {
 
     expect(sendEvent).toHaveBeenCalledWith({ type: "say", payload: { text: "危ない！", kind: "reflex" } });
   });
+
+  it("speaks response.text directly (2026-11-09 /chat contract: content is the spoken line, not a tool)", async () => {
+    const registry = new SkillRegistry();
+    const sendEvent = vi.fn(async () => undefined);
+
+    const result = await runJudgmentCycle({
+      llm: fakeLlm({ toolCalls: [], text: "よし、木を集めてくるね。" }),
+      registry,
+      bot: null,
+      system: "system prompt",
+      history: [],
+      bridge: { sendEvent },
+      logger: fakeLogger(),
+      sessionId: "s1",
+    });
+
+    expect(result.spoke).toEqual(["よし、木を集めてくるね。"]);
+    expect(sendEvent).toHaveBeenCalledWith({
+      type: "say",
+      payload: { text: "よし、木を集めてくるね。", kind: "intent" },
+    });
+  });
+
+  it("speaks response.text AND executes tool_calls in the same cycle (native contract sends both together)", async () => {
+    const registry = new SkillRegistry();
+    registry.register({
+      definition: { name: "collect", description: "collect", parameters: { type: "object", properties: {} } },
+      timeoutMs: 1000,
+      handler: async () => ({ ok: true, message: "oak_logを10個集めた" }),
+    });
+    const sendEvent = vi.fn(async () => undefined);
+
+    const result = await runJudgmentCycle({
+      llm: fakeLlm({
+        toolCalls: [{ name: "collect", args: { block: "oak_log", count: 10 } }],
+        text: "よし、木を集めてくるね。",
+      }),
+      registry,
+      bot: null,
+      system: "system prompt",
+      history: [],
+      bridge: { sendEvent },
+      logger: fakeLogger(),
+      sessionId: "s1",
+    });
+
+    expect(result.spoke).toEqual(["よし、木を集めてくるね。"]);
+    expect(result.executed).toEqual([
+      { name: "collect", args: { block: "oak_log", count: 10 }, result: { ok: true, message: "oak_logを10個集めた" } },
+    ]);
+  });
 });

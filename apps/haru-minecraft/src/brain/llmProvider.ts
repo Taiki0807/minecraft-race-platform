@@ -8,6 +8,10 @@ export type ChatRole = "system" | "user" | "assistant" | "tool";
 export type ChatMessage = {
   role: ChatRole;
   content: string;
+  /** role:"tool" のときの動作名(2026-11-09仕様の /chat が tool_name として要求する)。 */
+  toolName?: string;
+  /** role:"assistant" のときの、実際に返ってきたtool_calls(履歴へ再現するため)。 */
+  toolCalls?: ToolCall[];
 };
 
 export type ToolCall = {

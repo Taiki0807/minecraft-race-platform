@@ -1,4 +1,10 @@
-# GPU推論サービス 依頼仕様書(FastAPI実装向け)
+# GPU推論サービス 依頼仕様書(FastAPI実装向け) — ※2026-11-09時点で不要になりました
+
+> **この依頼は取り下げです。** 新しいFastAPIサービスを別に作るのではなく、
+> **既存の `/chat`(`https://chat.hosokawa-lab.dev/chat`)自体がネイティブの
+> `tools`/`tool_calls` に対応する形で改定されました**(2026-11-09)。実装は
+> `src/brain/adapters/haruChat.ts`(`LLM_PROVIDER=haru-chat`)。このファイルは
+> 検討の経緯として残すだけで、以下の内容はもう有効な依頼ではありません。
 
 対象: ハル・マイクラ(AI VTuberの自動マイクラプレイ)の「頭」(`apps/haru-minecraft`)が
 利用するGPU推論サービス。チャット補完(ツール呼び出し)とembedding生成の2本を

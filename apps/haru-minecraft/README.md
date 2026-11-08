@@ -1,51 +1,44 @@
 # haru-minecraft
 
-AI VTuber「ハル」が自動でMinecraftをプレイするための「頭(brain)」。
-「ハル・マイクラ API仕様（連携契約）v1（2026-11-07）」に従う。
+AI VTuber「ハル」が自動でMinecraftをプレイするための実装。
+「ハル・マイクラ API仕様（連携契約）v1（2026-11-07）」+ 2026-11-09の`/chat`仕様改定
+(ネイティブtools対応)に従う。単一プロセスで以下を全部持つ:
 
 - **(A) bridge**: Creator Studio管理画面との連携 (`src/bridge/`)
 - **(B) brain**: LLMによる判断ループ (`src/brain/`)
+- **(C) skills**: Mineflayer本体+定番プラグイン(pathfinder等)での実際のゲーム操作 (`src/skills/`, `src/bot/`)
 - **(D) memory**: SQLiteによるエピソード・スキル・教訓の保存 (`src/memory/`)
 
-(C)のスキル実行(Mineflayerでの実際のゲーム操作)は**このプロセスには無い**。
-別パッケージ `apps/haru-body` がMineflayer本体+定番プラグイン(pathfinder等)で
-実行し、このプロセスは `src/body/client.ts`(`BodyClient`)経由でHTTPで呼ぶだけ。
+## 配置場所: Proxmox(`haru_worker` VM)
 
-## 配置場所: Proxmox(haru-bodyと同居)
-
-このプロセス自体はGPUもMinecraft接続も直接使わない(全部HTTP越しの呼び出し)ため、
-**`apps/haru-body` と同じProxmox VM(`haru_worker`)に同居させる**。GPUが必要な
-LLM・embedding生成はWindows側のサービスにAPI越しで依頼し、Creator Studio(Mac側)
-へは発話・イベントをAPI越しに送るだけ。
+Mineflayerでマイクラに直接接続するため、マイクラサーバーと同じクラスタに置く。
+外部との通信はAPI越し: GPUが必要なLLM・embeddingはWindows側の`/chat`に、
+発話・イベント通知はMac側のCreator Studioに、それぞれHTTPで送るだけ。
 
 ```
-                         [Proxmox VM: haru_worker]
-                         ┌───────────────────────┐
-                         │ haru-minecraft(ここ)    │
-                         │   │                    │
-Mac: Creator Studio <----┼---┤ (A) 発話/イベント送信   │
-                         │   │                    │
-Windows: LLM/embedding <-┼---┤ (B) 判断・学習(GPU要求) │
-  (FastAPI, GPU)         │   │                    │
-                         │   ▼                    │
-                         │ haru-body ---mineflayer-┼--> Minecraftサーバー
-                         └───────────────────────┘
+Mac: Creator Studio <--HTTP-- [Proxmox VM: haru_worker]
+                                 haru-minecraft(ここ、1プロセス)
+                                   - Mineflayer本体でMinecraftサーバーへ直接接続
+                                   - 判断・記憶・bridgeも同プロセス内
+                                 --HTTP--> Windows: chat.hosokawa-lab.dev/chat (LLM)
 ```
 
-`BODY_BASE_URL` は既定で `http://127.0.0.1:3300`(同居前提のlocalhost)。
-`STUDIO_BASE_URL` はMacの実アドレス(Tailscale等)を指す必要がある
-(localhostでは届かない)。
+`STUDIO_BASE_URL`はMacの実アドレス(Tailscale)を指す必要がある(localhostでは届かない)。
 
 ## セットアップ
 
 ```bash
 npm install
-cp .env.example .env   # 値を記入する(Secretはここにのみ書く)。BODY_TOKEN は
-                        # apps/haru-body 側の .env と同じ値にする
+cp .env.example .env   # 値を記入する(Secretはここにのみ書く)
 npm run dev
 ```
 
-`apps/haru-body` が先に起動していないと `connect()` (起動時の `/tools` 取得)で失敗する。
+## LLM: `LLM_PROVIDER=haru-chat`(既定、本命)
+
+2026-11-09に、既存の`/chat`(`chat.hosokawa-lab.dev`)自体がネイティブの
+`tools`/`tool_calls`に対応する形で改定された(新しいFastAPIサービスは不要になった)。
+実装は`src/brain/adapters/haruChat.ts`。`LLM_PROVIDER=home-llm`(改定前のJSON埋め込み
+互換モード)は経緯として残しているが、もう使う必要はない。
 
 ## コマンド
 
@@ -55,37 +48,30 @@ npm run dev
 
 ## デプロイ
 
-`haru_worker`(Proxmox VM)上で `apps/haru-body` と一緒に常駐させる。手順・systemd
-ユニットは `apps/haru-body/docs/proxmox-deploy.md` にまとめた(両パッケージ分)。
+`haru_worker`(Proxmox VM)上でsystemdサービスとして常駐させる。手順は
+`docs/proxmox-deploy.md`。`Dockerfile`/`.dockerignore`はローカル開発・CIでの
+ビルド確認用(race-controllerと構成を揃えるため)で、本番の配置先ではない。
 
-`Dockerfile` / `.dockerignore` はローカル開発・CIでのビルド確認用(race-controller
-と構成を揃えるため用意した)。コンテナ/k3s経由でのデプロイは今のところ想定していない
-(systemdでの直接実行。理由は同ドキュメント参照)。
+## マイクラの接続先
 
-~~`scripts/register-task.ps1`(Windowsタスクスケジューラ)~~ は、このプロセスをWindows
-に置く前提で最初に作ったが、Proxmoxに置く方針に変わったため**使わない**(削除はせず
-残してあるだけ)。
+レース大会用とは**別の、ハル専用・常時稼働のPaperサーバー**(1.21.9, Tailscale
+ホスト名 `haru-minecraft`)を使う。構築用IaCは`terraform/proxmox`(`haru_worker`)と
+`helm/haru-server`。配信画面にマイクラの映像を出す手順(別の観戦用クライアント+OBS)は
+`docs/streaming-setup.md`。
 
-## マイクラの接続先(apps/haru-body側の話)
+## 実機で確認できたこと(2026-11-08〜09、Proxmox実機で検証済み)
 
-実際のMinecraft接続設定(`MC_HOST`等)はこのパッケージには無く、`apps/haru-body/.env`
-にある。レース大会用とは**別の、ハル専用・常時稼働のPaperサーバー**(1.21.9, Tailscale
-ホスト名 `haru-minecraft`)を使う。配信中のレースとハルの自動プレイが互いのリソース・
-ワールドに影響しないための分離。構築用のIaCは `terraform/proxmox`(`haru_worker`)と
-`helm/haru-server` に用意した(まだ適用していない、手順は各READMEを参照)。
+- Mineflayerでの実際のMinecraftサーバーへの接続・spawn・死亡後の自動リスポーン
+- Creator Studioへの発話・イベント送信、および実際のTTS読み上げ
+- Creator StudioからのUI操作(`/minecraft`ページの開始/停止/一時停止/再開)
+- セッション終了時の振り返り(エピソードからの教訓抽出)
+- 旧home-llm互換モードでの基本動作(ただしJSON崩れ・無行動が多かった)
 
-## 未検証の範囲(重要)
+## 未検証の範囲
 
-このリポジトリ内の環境には実際のMinecraftサーバーもLLMも存在しないため、
-以下は型・ロジックとしては実装済みだが**実機での動作は未確認**:
-
-- `apps/haru-body` の各スキル実装(Mineflayer APIの呼び出し)・実際のサーバー接続
-- `src/brain/adapters/homeLlm.ts` のJSON指示埋め込み方式が、実際のLLMで
-  どの程度安定して正しいJSONを返せるか(仕様が明記する「Phase 1での検証が必要」な点)
-- Creator Studio側の `/api/minecraft/events` エンドポイントとの実際の通信(Mac↔Proxmox間)
-
-**実機で確認できたこと**: `apps/haru-body` と `apps/haru-minecraft` を実際に起動し、
-互いのHTTP連携(`/tools` 取得・`/status`)が動くことはこの開発環境で確認済み
-(Minecraft/LLM本体への接続のみ、実機が無いため未確認)。
+- 新しい`haru-chat`プロバイダ(ネイティブtool-calling)自体はまだ実機未確認
+  (仕様書のテスト結果はAIサーバー上での手動シミュレーションであり、本物のMineflayer
+  bot越しではまだ試されていない)
+- `docs/streaming-setup.md`の観戦クライアント+OBSキャプチャの手順全体
 
 型チェック・ユニットテスト(`npm run typecheck` / `npm test`)はいずれも通過している。

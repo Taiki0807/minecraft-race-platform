@@ -11,6 +11,7 @@ import { buildState } from "./bot/state.js";
 import { createSkillRegistry } from "./skills/index.js";
 import { OllamaProvider } from "./brain/adapters/ollama.js";
 import { HomeLlmProvider } from "./brain/adapters/homeLlm.js";
+import { HaruChatProvider } from "./brain/adapters/haruChat.js";
 import { buildSystemPrompt } from "./brain/promptBuilder.js";
 import { runJudgmentCycle } from "./brain/loop.js";
 import { Watchdog } from "./watchdog.js";
@@ -51,7 +52,14 @@ async function main(): Promise<void> {
   const llm =
     config.llmProvider === "ollama"
       ? new OllamaProvider(config.ollamaBaseUrl, config.ollamaModel, config.llmTimeoutMs, config.ollamaToken)
-      : new HomeLlmProvider(config.homeLlmBaseUrl, config.homeLlmToken, config.llmTimeoutMs);
+      : config.llmProvider === "haru-chat"
+        ? new HaruChatProvider(
+            config.homeLlmBaseUrl,
+            config.homeLlmToken,
+            config.llmTimeoutMs,
+            config.haruChatAutonomous
+          )
+        : new HomeLlmProvider(config.homeLlmBaseUrl, config.homeLlmToken, config.llmTimeoutMs);
 
   const registry = createSkillRegistry();
   const bot = createMinecraftBot({
@@ -224,14 +232,17 @@ async function main(): Promise<void> {
           sessionId,
         });
 
-        if (result.text) {
-          history.push({ role: "assistant", content: result.text });
+        if (result.text || result.toolCalls.length > 0) {
+          // tool_callsも一緒に積む: 2026-11-09仕様の /chat は、直前の応答をそのまま
+          // 履歴に戻すことを要求する(ハルが「やると言った」ことを覚え続けるため)。
+          history.push({ role: "assistant", content: result.text ?? "", toolCalls: result.toolCalls });
         }
 
         for (const executed of result.executed) {
           history.push({
             role: "tool",
-            content: `${executed.name}: ${executed.result.ok ? "ok" : "failed"} - ${executed.result.message}`,
+            toolName: executed.name,
+            content: executed.result.ok ? executed.result.message : `失敗: ${executed.result.message}`,
           });
 
           await recordAndLearnFromTool(sessionId, executed.name, executed.args, executed.result);

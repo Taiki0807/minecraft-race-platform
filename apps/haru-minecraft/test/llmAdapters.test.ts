@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OllamaProvider, parseOpenAiResponse } from "../src/brain/adapters/ollama.js";
 import { HomeLlmProvider, parseHomeLlmContent } from "../src/brain/adapters/homeLlm.js";
+import { HaruChatProvider } from "../src/brain/adapters/haruChat.js";
 
 function jsonResponse(body: unknown): Response {
   return { ok: true, status: 200, json: async () => body } as unknown as Response;
@@ -164,5 +165,92 @@ describe("parseHomeLlmContent (home-llm compatibility mode)", () => {
   it("ignores tool_calls entries missing a string name", () => {
     const result = parseHomeLlmContent('{"tool_calls":[{"args":{}},{"name":"eat","args":{}}]}');
     expect(result.toolCalls).toEqual([{ name: "eat", args: {} }]);
+  });
+});
+
+describe("HaruChatProvider (2026-11-09 native tool-calling /chat contract)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ content: "よし、木を集めてくるね。", tool_calls: [{ name: "collect", arguments: { block: "oak_log", count: 10 } }], adapter: null, model: "gemma4:e4b" })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("parses the flat {name, arguments} tool_calls shape without needing JSON.parse", async () => {
+    const provider = new HaruChatProvider("https://chat.hosokawa-lab.dev", "secret", 5000);
+    const result = await provider.chat({ system: "s", messages: [], tools: [] });
+
+    expect(result.toolCalls).toEqual([{ name: "collect", args: { block: "oak_log", count: 10 } }]);
+    expect(result.text).toBe("よし、木を集めてくるね。");
+  });
+
+  it("sends tools in OpenAI function format, temperature capped at 0.3, and autonomous:true by default", async () => {
+    const provider = new HaruChatProvider("https://chat.hosokawa-lab.dev", "secret", 5000);
+    await provider.chat({
+      system: "s",
+      messages: [],
+      tools: [{ name: "wait", description: "待つ", parameters: { type: "object", properties: {} } }],
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(body.tools).toEqual([
+      { type: "function", function: { name: "wait", description: "待つ", parameters: { type: "object", properties: {} } } },
+    ]);
+    expect(body.temperature).toBe(0.3);
+    expect(body.autonomous).toBe(true);
+    expect(body.stream).toBe(false);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://chat.hosokawa-lab.dev/chat");
+    expect(fetchMock.mock.calls[0]?.[1]?.headers.Authorization).toBe("Bearer secret");
+  });
+
+  it("omits autonomous when constructed with autonomous=false", async () => {
+    const provider = new HaruChatProvider("https://chat.hosokawa-lab.dev", "", 5000, false);
+    await provider.chat({ system: "s", messages: [], tools: [] });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(body.autonomous).toBeUndefined();
+  });
+
+  it("re-wraps an assistant's prior tool_calls into {function:{name,arguments}} for history", async () => {
+    const provider = new HaruChatProvider("https://chat.hosokawa-lab.dev", "", 5000);
+    await provider.chat({
+      system: "s",
+      messages: [
+        { role: "assistant", content: "よし、木を集めてくるね。", toolCalls: [{ name: "collect", args: { block: "oak_log", count: 10 } }] },
+      ],
+      tools: [],
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(body.messages[1]).toEqual({
+      role: "assistant",
+      content: "よし、木を集めてくるね。",
+      tool_calls: [{ function: { name: "collect", arguments: { block: "oak_log", count: 10 } } }],
+    });
+  });
+
+  it("sends tool-role messages with tool_name (not tool_call_id)", async () => {
+    const provider = new HaruChatProvider("https://chat.hosokawa-lab.dev", "", 5000);
+    await provider.chat({
+      system: "s",
+      messages: [{ role: "tool", toolName: "collect", content: "oak_logを10個集めた" }],
+      tools: [],
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(body.messages[1]).toEqual({ role: "tool", tool_name: "collect", content: "oak_logを10個集めた" });
+  });
+
+  it("surfaces the {detail} error body in the thrown error on a non-ok response", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 422, json: async () => ({ detail: "role の種類が違う" }) });
+    const provider = new HaruChatProvider("https://chat.hosokawa-lab.dev", "", 5000);
+
+    await expect(provider.chat({ system: "s", messages: [], tools: [] })).rejects.toThrow(/422.*role の種類が違う/);
   });
 });

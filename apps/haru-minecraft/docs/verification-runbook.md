@@ -77,30 +77,22 @@ curl -X POST http://127.0.0.1:3200/control \
 
 ## 段階C: LLM接続確認
 
-**まずFastAPIを待たず、既存のhome-llmで配線だけ確認する:**
+2026-11-09以降、既存の`/chat`自体がネイティブの`tools`/`tool_calls`に対応した
+(新しいFastAPIサービスは不要になった)。既定で使う:
 
 ```bash
 # .env
-LLM_PROVIDER=home-llm
+LLM_PROVIDER=haru-chat
 LOCAL_LLM_URL=https://chat.hosokawa-lab.dev
 LOCAL_LLM_TOKEN=<既存のトークン>
+HARU_CHAT_AUTONOMOUS=true
 ```
 
-段階Bと同じく `/control start` → `logs/*.jsonl` の `decision` ログを見る。
-`tool_calls` が空配列でも構わない(home-llmはJSON指示埋め込み方式なので、精度は
-あまり期待しない)。**ここで見たいのは「クラッシュせず1周回るか」だけ**。
+`/control start` → `logs/*.jsonl` の `decision` ログを見る。`tool_calls`に
+`{name, args}`形式で実際の行動(`collect`, `move_to`等)が入っているか、
+`text`(発話内容)が`speak`ログ・Creator Studio双方に届いているか確認する。
 
-**FastAPIが準備できたら:**
-
-```bash
-# .env
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=<FastAPIサービスのURL>
-OLLAMA_MODEL=<モデル名>
-```
-
-同じ手順で`/control start`し、`decision`ログの`tool_calls`に実際の形式(`{name, args}`)が
-入っているか確認する。ここで初めて「ハルが自分でツールを選べているか」を見ることになる。
+(`LLM_PROVIDER=home-llm` は改定前の古いJSON埋め込み互換モードで、もう使う必要はない)
 
 ---
 

@@ -34,8 +34,11 @@ export type JudgmentCycleOptions = {
 /**
  * 1回の判断サイクル: LLMへ状態を渡して判断させ、tool_calls を実行する。
  *
- * speak は(C)のツールとして定義されているが、ここではゲーム内で実行せず、
- * (A)の say イベントへ変換してbridge経由で送る(brainの責務)。
+ * 発話の扱いは2経路ある:
+ *  - 2026-11-09仕様改定版の /chat(HaruChatProvider)は、話す内容を応答の content に
+ *    直接入れてくる(toolの形ではない)。response.text があれば常に(A)のsayイベントへ送る。
+ *  - 旧い互換モード(ollama/home-llm)が speak という名前のツールを呼んできた場合も、
+ *    後方互換として同じくsayイベントへ変換する(ゲーム内では実行しない)。
  * それ以外のツールは SkillRegistry.execute に委譲し、結果をそのままログへ残す
  * (ツール実行結果のmessageが次の判断の環境フィードバックになる)。
  */
@@ -55,12 +58,20 @@ export async function runJudgmentCycle(opts: JudgmentCycleOptions): Promise<Judg
   const executed: ExecutedTool[] = [];
   const spoke: string[] = [];
 
+  async function speak(text: string): Promise<void> {
+    spoke.push(text);
+    await opts.logger.log("speak", opts.sessionId, { text });
+    await opts.bridge.sendEvent({ type: "say", payload: { text, kind: opts.speakKind ?? "intent" } });
+  }
+
+  if (response.text) {
+    await speak(response.text);
+  }
+
   for (const call of response.toolCalls) {
     if (call.name === "speak") {
       const text = typeof call.args.text === "string" ? call.args.text : "";
-      spoke.push(text);
-      await opts.logger.log("speak", opts.sessionId, { text });
-      await opts.bridge.sendEvent({ type: "say", payload: { text, kind: opts.speakKind ?? "intent" } });
+      await speak(text);
       continue;
     }
 
