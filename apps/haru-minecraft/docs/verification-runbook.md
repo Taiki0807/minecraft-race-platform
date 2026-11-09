@@ -11,7 +11,7 @@
 ```
 段階A (プロセス単体の起動)     ← 何も繋がっていなくても起動自体はできる
 段階B (Minecraft接続)          ← サーバーがあれば確認できる。LLM/Creator Studio不要
-段階C (LLM接続)                ← 既存のhome-llmでまず試せる。FastAPI待たなくてよい
+段階C (LLM接続)                ← 既存の/chat(ネイティブtool対応版)で試せる
 段階D (Creator Studio連携)     ← 独立して確認できる
 段階E (通し確認)               ← A〜Dが全部繋がってから
 ```
@@ -89,7 +89,7 @@ HARU_CHAT_AUTONOMOUS=true
 ```
 
 `/control start` → `logs/*.jsonl` の `decision` ログを見る。`tool_calls`に
-`{name, args}`形式で実際の行動(`collect`, `move_to`等)が入っているか、
+`{name, args}`形式で実際の行動(`collect`, `go_to`等)が入っているか、
 `text`(発話内容)が`speak`ログ・Creator Studio双方に届いているか確認する。
 
 (`LLM_PROVIDER=home-llm` は改定前の古いJSON埋め込み互換モードで、もう使う必要はない)

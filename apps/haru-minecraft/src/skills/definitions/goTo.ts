@@ -2,9 +2,9 @@ import type { Bot } from "mineflayer";
 import { goals } from "../pathfinderGoals.js";
 import type { Skill } from "../types.js";
 
-export const moveToSkill: Skill = {
+export const goToSkill: Skill = {
   definition: {
-    name: "move_to",
+    name: "go_to",
     description: "指定座標の近く(1マス以内)まで歩いて移動する。",
     parameters: {
       type: "object",

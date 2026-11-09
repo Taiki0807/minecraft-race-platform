@@ -13,7 +13,7 @@ function vec(x: number, y: number, z: number) {
   };
 }
 
-function fakeBot(): Bot {
+function fakeBot(groundBlockName = "grass_block"): Bot {
   return {
     health: 18,
     food: 15,
@@ -25,6 +25,7 @@ function fakeBot(): Bot {
       "2": { id: 2, name: "zombie", position: vec(3, 64, 4) },
       "3": { id: 3, username: "Steve", position: vec(10, 64, 10) },
     },
+    blockAt: () => (groundBlockName ? { name: groundBlockName } : null),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
@@ -47,5 +48,14 @@ describe("buildState", () => {
     const state = buildState(fakeBot());
     expect(state.nearbyEntities.map((e) => e.name)).toEqual(["zombie", "Steve"]);
     expect(state.nearbyEntities[0]?.distance).toBeLessThan(state.nearbyEntities[1]?.distance ?? Infinity);
+  });
+
+  it("reports the block directly underfoot as ground", () => {
+    expect(buildState(fakeBot("oak_leaves")).ground).toBe("oak_leaves");
+    expect(buildState(fakeBot("grass_block")).ground).toBe("grass_block");
+  });
+
+  it("falls back to 'unknown' when the block below hasn't loaded", () => {
+    expect(buildState(fakeBot("")).ground).toBe("unknown");
   });
 });

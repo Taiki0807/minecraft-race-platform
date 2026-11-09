@@ -7,7 +7,8 @@ import { eatSkill } from "./definitions/eat.js";
 import { equipSkill } from "./definitions/equip.js";
 import { findBlocksSkill } from "./definitions/findBlocks.js";
 import { getStateSkill } from "./definitions/getState.js";
-import { moveToSkill } from "./definitions/moveTo.js";
+import { goDownSkill } from "./definitions/goDown.js";
+import { goToSkill } from "./definitions/goTo.js";
 import { placeBlockSkill } from "./definitions/placeBlock.js";
 import { speakSkill } from "./definitions/speak.js";
 import { waitSkill } from "./definitions/wait.js";
@@ -19,7 +20,8 @@ export function createSkillRegistry(): SkillRegistry {
   for (const skill of [
     speakSkill,
     getStateSkill,
-    moveToSkill,
+    goToSkill,
+    goDownSkill,
     findBlocksSkill,
     digBlockSkill,
     placeBlockSkill,
