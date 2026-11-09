@@ -8,6 +8,10 @@ import { BridgeClient } from "./bridge/client.js";
 import { ControlServer } from "./bridge/controlServer.js";
 import { createMinecraftBot } from "./bot/createBot.js";
 import { buildState } from "./bot/state.js";
+import { findRealGroundY, isTreeMaterial } from "./bot/ground.js";
+import { walkTo } from "./bot/movement.js";
+import { goals } from "./skills/pathfinderGoals.js";
+import { Vec3 } from "vec3";
 import { createSkillRegistry } from "./skills/index.js";
 import { OllamaProvider } from "./brain/adapters/ollama.js";
 import { HomeLlmProvider } from "./brain/adapters/homeLlm.js";
@@ -82,6 +86,31 @@ async function main(): Promise<void> {
   bot.on("spawn", () => {
     const position = bot.entity.position;
     repo.addWorldFact(db, { kind: "base", key: "spawn", value: { x: position.x, y: position.y, z: position.z } });
+  });
+
+  // 仕様追記(2026-11-09, 足元状態の強化): 木の上にスポーンしたとき、ハル(LLM)の
+  // 判断を待たずボット側で即座に地面まで降りる(8/8の試行でLLMに任せると木材採集
+  // から始めてしまい気付かないため)。
+  bot.once("spawn", () => {
+    void (async () => {
+      try {
+        const position = bot.entity.position;
+        const x = Math.floor(position.x);
+        const z = Math.floor(position.z);
+        const standingY = Math.floor(position.y) - 1;
+        const standing = bot.blockAt(new Vec3(x, standingY, z));
+        if (!standing || !isTreeMaterial(standing.name)) return;
+
+        const groundY = findRealGroundY(bot, x, z, standingY);
+        if (groundY === null) return;
+        await walkTo(bot, new goals.GoalNear(x, groundY, z, 1));
+      } catch (error) {
+        void logger?.log("error", sessionId, {
+          phase: "spawn_auto_descend",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
   });
 
   // (D) 死亡はエピソードとして残し、(A) にも通知する。

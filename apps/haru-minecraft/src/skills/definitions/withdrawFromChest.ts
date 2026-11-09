@@ -1,18 +1,20 @@
 import type { Bot, Chest } from "mineflayer";
 import { goals } from "../pathfinderGoals.js";
 import { mcDataFor } from "../mcDataFor.js";
+import { walkTo } from "../../bot/movement.js";
 import type { Skill } from "../types.js";
 
 const CHEST_RANGE = 32;
 
-async function openNearestChest(bot: Bot): Promise<Chest | null> {
+async function openNearestChest(bot: Bot): Promise<Chest | { error: string } | null> {
   const data = mcDataFor(bot);
   const chestId = data.blocksByName.chest?.id;
   if (chestId === undefined) return null;
   const block = bot.findBlock({ matching: chestId, maxDistance: CHEST_RANGE });
   if (!block) return null;
 
-  await bot.pathfinder.goto(new goals.GoalNear(block.position.x, block.position.y, block.position.z, 1));
+  const moveResult = await walkTo(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 1));
+  if (!moveResult.ok) return { error: moveResult.message };
   return (await bot.openContainer(block)) as Chest;
 }
 
@@ -41,6 +43,7 @@ export const withdrawFromChestSkill: Skill = {
 
     const chest = await openNearestChest(bot);
     if (!chest) return { ok: false, message: "周囲にチェストが見つからない" };
+    if ("error" in chest) return { ok: false, message: chest.error };
 
     try {
       const available = chest.containerItems().filter((item) => item.type === info.id);

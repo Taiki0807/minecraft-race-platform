@@ -20,7 +20,13 @@ export function createMinecraftBot(config: BotConnectionConfig): Bot {
   bot.loadPlugin(pathfinder);
 
   bot.once("spawn", () => {
-    bot.pathfinder.setMovements(new Movements(bot));
+    const movements = new Movements(bot);
+    // 仕様追記(2026-11-09, 移動で詰まったとき対応): 邪魔な葉っぱ・木を壊して
+    // 通れるようにする。パルクール・スプリントも許可して経路の柔軟性を上げる。
+    movements.canDig = true;
+    movements.allowParkour = true;
+    movements.allowSprinting = true;
+    bot.pathfinder.setMovements(movements);
   });
 
   return bot;

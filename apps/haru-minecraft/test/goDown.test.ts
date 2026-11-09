@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Bot } from "mineflayer";
+import { Vec3 } from "vec3";
 import { goDownSkill } from "../src/skills/definitions/goDown.js";
 
 type ColumnWorld = Record<number, { name: string; boundingBox: "block" | "empty" }>;
@@ -11,16 +12,20 @@ function empty(): { name: string; boundingBox: "block" | "empty" } {
   return { name: "air", boundingBox: "empty" };
 }
 
-/** y座標 -> ブロック情報 の対応表だけを持つ、1本の列(x,z固定)のフェイクワールド。 */
+/**
+ * y座標 -> ブロック情報 の対応表だけを持つ、1本の列(x,z固定)のフェイクワールド。
+ * walkTo()はgotoが即resolveする前提なので、詰まり対応(unstuck)側のAPIはモックしていない。
+ */
 function fakeBotOnColumn(position: { x: number; y: number; z: number }, column: ColumnWorld) {
   const gotoCalls: Array<{ x: number; y: number; z: number }> = [];
   const bot = {
-    entity: { position },
+    entity: { position: new Vec3(position.x, position.y, position.z), yaw: 0 },
     blockAt: (vec: { y: number }) => column[vec.y] ?? null,
     pathfinder: {
       goto: vi.fn(async (goal: { x: number; y: number; z: number }) => {
         gotoCalls.push({ x: goal.x, y: goal.y, z: goal.z });
       }),
+      stop: vi.fn(),
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any as Bot;

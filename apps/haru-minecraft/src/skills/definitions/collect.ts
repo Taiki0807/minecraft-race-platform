@@ -1,6 +1,7 @@
 import type { Bot } from "mineflayer";
 import { goals } from "../pathfinderGoals.js";
 import { mcDataFor } from "../mcDataFor.js";
+import { walkTo } from "../../bot/movement.js";
 import type { Skill } from "../types.js";
 
 const SEARCH_RANGE = 48;
@@ -36,7 +37,8 @@ export const collectSkill: Skill = {
         const block = bot.findBlock({ matching: blockInfo.id, maxDistance: SEARCH_RANGE });
         if (!block) break;
 
-        await bot.pathfinder.goto(new goals.GoalNear(block.position.x, block.position.y, block.position.z, 1));
+        const moveResult = await walkTo(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 1));
+        if (!moveResult.ok) break;
         if (!bot.canDigBlock(block)) break;
 
         const tool = bot.pathfinder.bestHarvestTool(block);

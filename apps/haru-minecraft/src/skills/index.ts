@@ -1,4 +1,5 @@
 import { SkillRegistry } from "./registry.js";
+import { attackSkill } from "./definitions/attack.js";
 import { collectSkill } from "./definitions/collect.js";
 import { craftItemSkill } from "./definitions/craftItem.js";
 import { depositToChestSkill } from "./definitions/depositToChest.js";
@@ -6,6 +7,7 @@ import { digBlockSkill } from "./definitions/digBlock.js";
 import { eatSkill } from "./definitions/eat.js";
 import { equipSkill } from "./definitions/equip.js";
 import { findBlocksSkill } from "./definitions/findBlocks.js";
+import { fleeSkill } from "./definitions/flee.js";
 import { getStateSkill } from "./definitions/getState.js";
 import { goDownSkill } from "./definitions/goDown.js";
 import { goToSkill } from "./definitions/goTo.js";
@@ -31,6 +33,8 @@ export function createSkillRegistry(): SkillRegistry {
     eatSkill,
     depositToChestSkill,
     withdrawFromChestSkill,
+    attackSkill,
+    fleeSkill,
     waitSkill,
   ]) {
     registry.register(skill);

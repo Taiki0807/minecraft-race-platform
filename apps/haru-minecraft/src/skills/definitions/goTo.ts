@@ -1,5 +1,6 @@
 import type { Bot } from "mineflayer";
 import { goals } from "../pathfinderGoals.js";
+import { walkTo } from "../../bot/movement.js";
 import type { Skill } from "../types.js";
 
 export const goToSkill: Skill = {
@@ -16,7 +17,8 @@ export const goToSkill: Skill = {
       required: ["x", "y", "z"],
     },
   },
-  timeoutMs: 30_000,
+  // walkTo は詰まったときに最大3回やり直す(1回ごと最大60秒)ため、その分の余裕を持たせる。
+  timeoutMs: 200_000,
   handler: async (ctx, args) => {
     const bot = ctx.bot as Bot;
     const x = Number(args.x);
@@ -26,11 +28,9 @@ export const goToSkill: Skill = {
       return { ok: false, message: "x,y,z は数値で指定してください" };
     }
 
-    try {
-      await bot.pathfinder.goto(new goals.GoalNear(x, y, z, 1));
-      return { ok: true, message: `(${x}, ${y}, ${z}) 付近に到達した` };
-    } catch (error) {
-      return { ok: false, message: `移動に失敗した: ${error instanceof Error ? error.message : String(error)}` };
-    }
+    const result = await walkTo(bot, new goals.GoalNear(x, y, z, 1));
+    return result.ok
+      ? { ok: true, message: `(${x}, ${y}, ${z}) 付近に到達した` }
+      : result;
   },
 };

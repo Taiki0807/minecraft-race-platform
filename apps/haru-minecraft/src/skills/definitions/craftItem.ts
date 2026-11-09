@@ -1,6 +1,7 @@
 import type { Bot } from "mineflayer";
 import { goals } from "../pathfinderGoals.js";
 import { mcDataFor } from "../mcDataFor.js";
+import { walkTo } from "../../bot/movement.js";
 import type { Skill } from "../types.js";
 
 const CRAFTING_TABLE_RANGE = 32;
@@ -38,15 +39,15 @@ export const craftItemSkill: Skill = {
         maxDistance: CRAFTING_TABLE_RANGE,
       });
       if (tableBlock) {
-        try {
-          await bot.pathfinder.goto(
-            new goals.GoalNear(tableBlock.position.x, tableBlock.position.y, tableBlock.position.z, 1)
-          );
+        const moveResult = await walkTo(
+          bot,
+          new goals.GoalNear(tableBlock.position.x, tableBlock.position.y, tableBlock.position.z, 1)
+        );
+        if (moveResult.ok) {
           recipes = bot.recipesFor(itemInfo.id, null, 1, tableBlock);
           craftingTable = tableBlock;
-        } catch {
-          // 作業台へ移動できなければ手持ちレシピのみで判断する(recipesは空のまま)。
         }
+        // 作業台へ移動できなければ手持ちレシピのみで判断する(recipesは空のまま)。
       }
     }
 

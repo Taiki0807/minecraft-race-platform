@@ -1,15 +1,9 @@
 import type { Bot } from "mineflayer";
 import { Vec3 } from "vec3";
 import { goals } from "../pathfinderGoals.js";
+import { walkTo } from "../../bot/movement.js";
+import { findRealGroundY, isTreeMaterial } from "../../bot/ground.js";
 import type { Skill } from "../types.js";
-
-const MAX_SCAN_DOWN = 60;
-
-// 葉っぱ・原木など「木の上に乗ってしまった」を示すブロック。boundingBoxだけでは
-// 普通の地面(stone/dirt等も"block")と区別できないため、名前で判定する。
-function isTreeMaterial(name: string): boolean {
-  return name.includes("leaves") || name.endsWith("_log") || name.endsWith("_wood");
-}
 
 /**
  * 木の上(葉っぱ・原木)に乗ってしまったときに、木材を飛ばして本当の地面まで降りる。
@@ -21,7 +15,7 @@ export const goDownSkill: Skill = {
     description: "木の上や高い場所にいるとき、地面まで降りる。",
     parameters: { type: "object", properties: {} },
   },
-  timeoutMs: 30_000,
+  timeoutMs: 200_000,
   handler: async (ctx) => {
     const bot = ctx.bot as Bot;
     const position = bot.entity.position;
@@ -37,35 +31,12 @@ export const goDownSkill: Skill = {
       return { ok: true, message: "すでに地面にいる" };
     }
 
-    const minY = standingY - MAX_SCAN_DOWN;
-    let groundY: number | null = null;
-    for (let y = standingY - 1; y >= minY; y--) {
-      const below = bot.blockAt(new Vec3(x, y, z));
-      const at = bot.blockAt(new Vec3(x, y + 1, z));
-      if (
-        below &&
-        at &&
-        below.boundingBox === "block" &&
-        !isTreeMaterial(below.name) &&
-        at.boundingBox === "empty"
-      ) {
-        groundY = y + 1;
-        break;
-      }
-    }
-
+    const groundY = findRealGroundY(bot, x, z, standingY);
     if (groundY === null) {
       return { ok: false, message: "地面が見つからない(走査範囲内に木材でない場所が無い)" };
     }
 
-    try {
-      await bot.pathfinder.goto(new goals.GoalNear(x, groundY, z, 1));
-      return { ok: true, message: `地面(y=${groundY})まで降りた` };
-    } catch (error) {
-      return {
-        ok: false,
-        message: `降りるのに失敗した: ${error instanceof Error ? error.message : String(error)}`,
-      };
-    }
+    const result = await walkTo(bot, new goals.GoalNear(x, groundY, z, 1));
+    return result.ok ? { ok: true, message: `地面(y=${groundY})まで降りた` } : result;
   },
 };

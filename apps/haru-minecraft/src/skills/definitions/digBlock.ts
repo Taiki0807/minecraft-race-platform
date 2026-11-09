@@ -2,6 +2,7 @@ import type { Bot } from "mineflayer";
 import { goals } from "../pathfinderGoals.js";
 import { Vec3 } from "vec3";
 import { mcDataFor } from "../mcDataFor.js";
+import { walkTo } from "../../bot/movement.js";
 import type { Skill } from "../types.js";
 
 const DEFAULT_RANGE = 32;
@@ -17,7 +18,8 @@ async function digOne(bot: Bot, targetBlockId: number | null, x?: number, y?: nu
   if (!block) return { ok: false as const, message: "対象のブロックが見つからない" };
   if (!bot.canDigBlock(block)) return { ok: false as const, message: `${block.name} は掘れない状態` };
 
-  await bot.pathfinder.goto(new goals.GoalNear(block.position.x, block.position.y, block.position.z, 1));
+  const moveResult = await walkTo(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 1));
+  if (!moveResult.ok) return { ok: false as const, message: moveResult.message };
 
   const tool = bot.pathfinder.bestHarvestTool(block);
   if (tool) {

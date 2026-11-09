@@ -7,6 +7,7 @@ describe("createSkillRegistry", () => {
     const names = registry.listToolDefinitions().map((d) => d.name).sort();
     expect(names).toEqual(
       [
+        "attack",
         "collect",
         "craft_item",
         "deposit_to_chest",
@@ -14,6 +15,7 @@ describe("createSkillRegistry", () => {
         "eat",
         "equip",
         "find_blocks",
+        "flee",
         "get_state",
         "go_down",
         "go_to",

@@ -8,6 +8,8 @@ const state: GameState = {
   food: 18,
   position: { x: 1, y: 64, z: 2 },
   ground: "grass_block",
+  groundHint: "",
+  dangerText: null,
   timeOfDay: 1000,
   isDay: true,
   inventory: [],
@@ -36,17 +38,28 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("木を集めるときは斧を装備する");
   });
 
-  it("flags standing on tree leaves and suggests go_down", () => {
-    const onTree: GameState = { ...state, ground: "oak_leaves" };
+  it("flags standing on tree leaves with the real ground distance", () => {
+    const onTree: GameState = {
+      ...state,
+      ground: "oak_leaves",
+      groundHint: "。今は木の上にいる（地面は y=64、8ブロック下）",
+    };
     const prompt = buildSystemPrompt("ハルの人格プロンプト", onTree, []);
     expect(prompt).toContain("足元: oak_leaves");
-    expect(prompt).toContain("go_down");
+    expect(prompt).toContain("木の上にいる");
+    expect(prompt).toContain("y=64");
   });
 
   it("flags nothing underfoot (likely falling)", () => {
-    const falling: GameState = { ...state, ground: "air" };
+    const falling: GameState = { ...state, ground: "air", groundHint: "。何も無い(落下中かも)" };
     const prompt = buildSystemPrompt("ハルの人格プロンプト", falling, []);
     expect(prompt).toContain("足元: air");
     expect(prompt).toContain("落下中かも");
+  });
+
+  it("surfaces the bot-computed danger judgment when enemies are nearby", () => {
+    const danger: GameState = { ...state, dangerText: "危険の判断: 逃げる(敵が合わせて4体)" };
+    const prompt = buildSystemPrompt("ハルの人格プロンプト", danger, []);
+    expect(prompt).toContain("危険の判断: 逃げる(敵が合わせて4体)");
   });
 });
